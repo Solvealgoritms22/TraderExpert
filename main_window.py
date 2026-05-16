@@ -1063,12 +1063,12 @@ function renderState(next) {{
         const sourcesText = (ext.sources || []).map(s => '• ' + s).join('\\n');
         const itemsText = (ext.items || []).map(i => '• ' + (i.title || i)).slice(0, 5).join('\\n');
         const tooltipContent = `FUENTES CONECTADAS:\\n${{sourcesText}}\\n\\nÚLTIMOS EVENTOS:\\n${{itemsText}}${{itemsCount > 5 ? '\\n... y ' + (itemsCount - 5) + ' más' : ''}}`;
-        const safeTooltip = tooltipContent.replace(/'/g, "\\'").replace(/\n/g, "\\\\n");
 
         document.getElementById('external-context').innerHTML = `
             <div style="display:flex; flex-direction:column; gap:4px; cursor:help;" 
-                 onmouseover="showTooltip(event, '${{safeTooltip}}')" 
-                 onmouseout="hideTooltip()">
+                 data-tip="${{tooltipContent}}"
+                 onmouseover="showTip(this, event)" 
+                 onmouseout="hideTip()">
                 <span style="color:var(--accent); font-weight:700;">${{sourcesCount}} fuentes conectadas</span>
                 <span class="muted">${{itemsCount}} eventos/noticias procesados</span>
             </div>
@@ -1108,7 +1108,9 @@ function renderState(next) {{
             <span><span class="pill ${{item.direction?.toLowerCase()}}">${{item.direction}}</span></span>
             <span><span class="pill ${{item.status}}">${{item.status}}</span></span>
             <span>${{Math.round(item.confidence * 100)}}%</span>
-            <span class="muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;padding-right:10px;" onmouseover="showTooltip(event, '${{escapeJs(item.reason || '')}}')" onmouseout="hideTooltip()">${{item.reason}}</span>
+            <span class="muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;padding-right:10px;" 
+                  data-tip="${{item.reason || ''}}"
+                  onmouseover="showTip(this, event)" onmouseout="hideTip()">${{item.reason}}</span>
             <span style="color:${{item.balance_delta >= 0 ? 'var(--success)' : 'var(--danger)'}}">${{item.balance_delta >= 0 ? '+' : ''}}${{item.balance_delta?.toFixed(2)}}</span>
         </div>
     `}}).join('') || `
@@ -1121,28 +1123,27 @@ function renderState(next) {{
 }}
 
 function escapeJs(str) {{
-    return str.replace(/'/g, "\\'").replace(/\n/g, "\\\\n");
+    return str.replace(/'/g, "\\'").replace(/\\n/g, "\\n");
 }}
 
-function showTooltip(e, text) {{
-    const el = document.getElementById('tooltip');
-    if (!text || !el) return;
-    el.textContent = text;
-    el.classList.add('visible');
-    const x = e.clientX + 15;
-    const y = e.clientY + 15;
-    el.style.left = x + 'px';
-    el.style.top = y + 'px';
+function showTip(el, e) {{
+    const tip = document.getElementById('tooltip');
+    const text = el.getAttribute('data-tip');
+    if (!text || !tip) return;
+    tip.textContent = text;
+    tip.classList.add('visible');
+    tip.style.left = (e.clientX + 15) + 'px';
+    tip.style.top = (e.clientY + 15) + 'px';
 }}
-function hideTooltip() {{
-    const el = document.getElementById('tooltip');
-    if (el) el.classList.remove('visible');
+function hideTip() {{
+    const tip = document.getElementById('tooltip');
+    if (tip) tip.classList.remove('visible');
 }}
 window.onmousemove = (e) => {{
-    const el = document.getElementById('tooltip');
-    if (el && el.classList.contains('visible')) {{
-        el.style.left = (e.clientX + 15) + 'px';
-        el.style.top = (e.clientY + 15) + 'px';
+    const tip = document.getElementById('tooltip');
+    if (tip && tip.classList.contains('visible')) {{
+        tip.style.left = (e.clientX + 15) + 'px';
+        tip.style.top = (e.clientY + 15) + 'px';
     }}
 }};
 
