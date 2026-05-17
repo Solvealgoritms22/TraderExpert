@@ -97,16 +97,28 @@ graph TD
 
 ## 📸 Capturas de Pantalla (Visual Overview)
 
-### Configuración Avanzada (Stepper de 5 Pasos)
-Elegante formulario segmentado con controles interactivos para brókers, selección dinámica de activos MT5, volumen (Lotes), SL, TP y tarjetas interactivas de IA con micro-animaciones.
+### 1. Panel de Control (Dashboard Principal)
+Visualización integral del saldo (simulado o real), equidad, estado del motor de decisión ("ESPERAR"), confianza algorítmica, riesgos geopolíticos/OSINT detectados e insignias dinámicas de conexión del bróker MT5 y estado de mercado.
 <p align="center">
-  <img src="C:/Users/dfajardo/.gemini/antigravity/brain/bb2c2e1e-03b5-40c7-95a1-3f19b76f49a8/media__1778972050051.png" alt="Paso de IA con Tarjetas Dinámicas" width="80%" />
+  <img src="docs/screenshots/dashboard.png" alt="Dashboard Principal TraderExpert" width="90%" />
 </p>
 
-### Panel de Control (Dashboard Principal)
-Visualización en tiempo real del saldo, equidad y estado de conexión MT5/Mercado. Tabla con tickets integrados, direcciones y contadores de vigencia de señales.
+### 2. Configuración - Conexión Broker MT5 (Paso 1)
+Acceso y enlace seguro al terminal MetaTrader 5 con credenciales encriptadas en el almacén seguro del sistema operativo (Windows Credential Manager).
 <p align="center">
-  <img src="C:/Users/dfajardo/.gemini/antigravity/brain/bb2c2e1e-03b5-40c7-95a1-3f19b76f49a8/media__1778976418488.png" alt="Dashboard Principal TraderExpert" width="80%" />
+  <img src="docs/screenshots/config_connection.png" alt="Configuración de Conexión MT5" width="90%" />
+</p>
+
+### 3. Configuración - Parámetros de Estrategia & RAG (Paso 4)
+Definición de prompts institucionales de estrategia, habilitación de base de conocimiento RAG local y selección instantánea del idioma de respuesta de la IA.
+<p align="center">
+  <img src="docs/screenshots/config_rag.png" alt="Configuración Estrategia RAG" width="90%" />
+</p>
+
+### 4. Gráfico e Historial Integrado con Tooltips Interactivos
+Visualización histórica de análisis con mini-gráficos de velas en tooltips flotantes que muestran dinámicamente los niveles exactos de entrada y salida calculados.
+<p align="center">
+  <img src="docs/screenshots/chart_tooltip.png" alt="Gráfico e Historial" width="90%" />
 </p>
 
 ---
