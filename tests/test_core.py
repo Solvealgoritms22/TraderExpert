@@ -37,7 +37,7 @@ class FakeAI:
 
 
 class FakeRAG:
-    def load_context(self, query_terms=None, max_chars=5000):
+    def load_context(self, query_terms=None, max_chars=5000, custom_dir=None):
         return "Reglas conservadoras."
 
 
@@ -80,6 +80,37 @@ class CoreTests(unittest.TestCase):
         self.assertIn("items", context)
         self.assertIn("warnings", context)
         self.assertIn("links", context)
+
+    def test_balance_settlement_real_mode(self):
+        from unittest.mock import MagicMock
+        settings = MagicMock()
+        settings.get.side_effect = lambda k, default=None: {
+            "trading_mode": "real",
+            "virtual_balance": 1000.0,
+            "mt5_path": ""
+        }.get(k, default)
+        
+        sig = {
+            "id": "1",
+            "symbol": "EURUSD",
+            "direction": "UP",
+            "entry_price": 1.1000,
+            "expires_at": (utc_now() - timedelta(minutes=1)).isoformat(),
+            "mt5_ticket": None
+        }
+        
+        history = MagicMock()
+        history.pending.return_value = [sig]
+        history.update.return_value = sig
+        
+        mt5 = MagicMock()
+        mt5.get_tick.return_value = {"price": 1.1050}
+        
+        service = BalanceService(settings, history, mt5)
+        evaluated = service.evaluate_due_signals()
+        
+        self.assertEqual(len(evaluated), 1)
+        settings.set.assert_not_called()
 
 
 if __name__ == "__main__":

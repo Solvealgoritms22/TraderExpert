@@ -9,6 +9,8 @@ import xml.etree.ElementTree as ET
 
 import config
 
+import concurrent.futures
+
 logger = logging.getLogger(__name__)
 
 
@@ -175,6 +177,40 @@ class ExternalContextService:
         except Exception as exc:
             context["warnings"].append(f"ECONOMIC_CALENDAR_API_URL fallo: {str(exc)[:160]}")
 
+    def _fetch_feed(self, url: str, source_name: str, terms: list[str]) -> list[dict[str, Any]]:
+        try:
+            # Low timeout to prevent slow RSS servers from blocking the system
+            response = self.session.get(url, timeout=3)
+            if response.status_code != 200:
+                return []
+            
+            root = ET.fromstring(response.content)
+            items = root.findall(".//item")
+            
+            results = []
+            count = 0
+            for item in items:
+                if count >= 3:
+                    break
+                    
+                title = item.find("title").text if item.find("title") is not None else ""
+                desc = item.find("description").text if item.find("description") is not None else ""
+                
+                content_lower = (title + " " + desc).lower()
+                if any(term.lower() in content_lower for term in terms):
+                    results.append({
+                        "source": source_name,
+                        "title": title[:200],
+                        "summary": desc[:500],
+                        "severity": "info",
+                        "raw": {"link": item.find("link").text if item.find("link") is not None else ""}
+                    })
+                    count += 1
+            return results
+        except Exception as e:
+            logger.debug("Error al procesar RSS %s: %s", source_name, e)
+            return []
+
     def _add_rss_news(self, context: dict[str, Any], settings: dict[str, Any]):
         """Fetches news from public RSS feeds (Free and Fresh)."""
         feeds = [
@@ -187,38 +223,16 @@ class ExternalContextService:
         terms = self._asset_terms(settings)
         added = False
         
-        for url, source_name in feeds:
-            try:
-                response = self.session.get(url, timeout=10)
-                if response.status_code != 200:
-                    continue
-                
-                root = ET.fromstring(response.content)
-                items = root.findall(".//item")
-                
-                count = 0
-                for item in items:
-                    if count >= 3: # Limit per feed to avoid noise
-                        break
-                        
-                    title = item.find("title").text if item.find("title") is not None else ""
-                    desc = item.find("description").text if item.find("description") is not None else ""
-                    
-                    # Filter by relevance to the current asset
-                    content_lower = (title + " " + desc).lower()
-                    if any(term.lower() in content_lower for term in terms):
-                        context["items"].append({
-                            "source": source_name,
-                            "title": title[:200],
-                            "summary": desc[:500],
-                            "severity": "info",
-                            "raw": {"link": item.find("link").text if item.find("link") is not None else ""}
-                        })
-                        count += 1
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(feeds)) as executor:
+            futures = {executor.submit(self._fetch_feed, url, name, terms): name for url, name in feeds}
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    feed_results = future.result()
+                    if feed_results:
+                        context["items"].extend(feed_results)
                         added = True
-                        
-            except Exception as e:
-                logger.debug("Error al procesar RSS %s: %s", source_name, e)
+                except Exception as exc:
+                    logger.debug("Error en tarea paralela de RSS: %s", exc)
         
         if added:
             context["sources"].append("rss_news_feeds")

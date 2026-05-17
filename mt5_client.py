@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Optional
-import os
+
 try:
     # pyrefly: ignore [missing-import]
     import keyring
@@ -10,6 +12,7 @@ except Exception:
     keyring = None
 from app_metadata import APP_NAME
 
+logger = logging.getLogger(__name__)
 
 try:
     import MetaTrader5 as mt5
@@ -22,6 +25,8 @@ class MarketDataError(RuntimeError):
 
 
 TIMEFRAME_NAMES = ("M1", "M2", "M5", "M15", "M30", "H1")
+
+MAGIC_NUMBER = 20250516  # Unique ID for TraderExpert orders
 
 
 def _timeframe_map() -> dict[str, Any]:
@@ -50,7 +55,7 @@ class MT5Client:
             raise MarketDataError("MetaTrader5 no esta instalado. Ejecuta: pip install MetaTrader5")
         ok = mt5.initialize(path=path) if path else mt5.initialize()
         if not ok:
-            raise MarketDataError(f"No se pudo conectar a MT5: {mt5.last_error()}")
+            raise MarketDataError(f"No se pudo conectar a MT5")
 
         # Optionally try to login using environment variables if present.
         acct = os.getenv("MT5_ACCOUNT")
@@ -85,7 +90,6 @@ class MT5Client:
                     if not password and keyring:
                         try:
                             service = f"{APP_NAME}_mt5"
-                            # Ensure account is a string for keyring lookup
                             account_str = str(account)
                             password = keyring.get_password(service, account_str) or keyring.get_password(service, "__default__")
                         except Exception:
@@ -105,7 +109,6 @@ class MT5Client:
                     except Exception as exc:
                         raise MarketDataError(f"MT5 login failed: {exc}")
                 else:
-                    logger = __import__('logging').getLogger(__name__)
                     logger.info("No MT5 password provided for account %s; assuming terminal already logged in.", account)
 
     def ensure_symbol(self, symbol: str):
@@ -162,6 +165,22 @@ class MT5Client:
             "volume": float(data.get("volume_real") or data.get("volume") or 0),
         }
 
+    def check_connection(self) -> bool:
+        if mt5 is None:
+            self.connected = False
+            return False
+        try:
+            info = mt5.terminal_info()
+            if info is None:
+                self.connected = False
+                return False
+            is_conn = bool(info.connected)
+            self.connected = is_conn
+            return is_conn
+        except Exception:
+            self.connected = False
+            return False
+
     def snapshot(self, settings: dict[str, Any], count: int = 240) -> dict[str, Any]:
         symbol = settings.get("symbol", "EURUSD")
         timeframe = settings.get("timeframe", "M1")
@@ -175,3 +194,220 @@ class MT5Client:
             "bars": self.get_rates(symbol, timeframe, count=count, path=path, account=account, password=password, server=server),
             "tick": self.get_tick(symbol, path=path, account=account, password=password, server=server),
         }
+
+    # ------------------------------------------------------------------
+    # Account Info
+    # ------------------------------------------------------------------
+
+    def get_account_info(self) -> dict[str, Any]:
+        """Get real-time account balance, equity, margin, etc."""
+        if mt5 is None or not self.connected:
+            return {}
+        try:
+            info = mt5.account_info()
+            if info is None:
+                return {}
+            return {
+                "balance": float(info.balance),
+                "equity": float(info.equity),
+                "margin": float(info.margin),
+                "free_margin": float(info.margin_free),
+                "profit": float(info.profit),
+                "leverage": int(info.leverage),
+                "currency": str(info.currency),
+                "server": str(info.server),
+                "login": int(info.login),
+                "trade_mode": int(info.trade_mode),  # 0=demo, 2=real
+            }
+        except Exception as exc:
+            logger.warning("Error getting account info: %s", exc)
+            return {}
+
+    # ------------------------------------------------------------------
+    # Symbol Discovery
+    # ------------------------------------------------------------------
+
+    def get_available_symbols(self) -> list[dict[str, Any]]:
+        """List all visible symbols available from the broker."""
+        if mt5 is None or not self.connected:
+            return []
+        try:
+            symbols = mt5.symbols_get()
+            if not symbols:
+                return []
+            result = []
+            for s in symbols:
+                if not s.visible:
+                    continue
+                result.append({
+                    "name": s.name,
+                    "path": s.path,
+                    "description": s.description,
+                    "trade_mode": int(s.trade_mode),
+                    "spread": int(s.spread),
+                    "digits": int(s.digits),
+                    "volume_min": float(s.volume_min),
+                    "volume_max": float(s.volume_max),
+                    "volume_step": float(s.volume_step),
+                })
+            return result
+        except Exception as exc:
+            logger.warning("Error listing symbols: %s", exc)
+            return []
+
+    # ------------------------------------------------------------------
+    # Market Status
+    # ------------------------------------------------------------------
+
+    def is_market_open(self, symbol: str) -> bool:
+        """Check if the market is open for trading a specific symbol."""
+        if mt5 is None or not self.connected:
+            return False
+        try:
+            info = mt5.symbol_info(symbol)
+            if info is None:
+                return False
+            # trade_mode: 0=disabled, 4=full access
+            return info.trade_mode == 4
+        except Exception:
+            return False
+
+    def can_trade(self) -> dict[str, Any]:
+        """Check if algorithmic trading is enabled and terminal is connected."""
+        if mt5 is None:
+            return {"can_trade": False, "reason": "MetaTrader5 no instalado"}
+        try:
+            info = mt5.terminal_info()
+            if info is None:
+                return {"can_trade": False, "reason": "MT5 no conectado"}
+            if not info.connected:
+                return {"can_trade": False, "reason": "MT5 sin conexion al servidor de trading"}
+            if not info.trade_allowed:
+                return {"can_trade": False, "reason": "Habilita 'Allow algo trading' en MT5 (Tools > Options > Expert Advisors)"}
+            return {"can_trade": True, "reason": ""}
+        except Exception as exc:
+            return {"can_trade": False, "reason": str(exc)[:200]}
+
+    # ------------------------------------------------------------------
+    # Order Execution
+    # ------------------------------------------------------------------
+
+    def place_market_order(self, symbol: str, direction: str, volume: float,
+                           sl: float = 0.0, tp: float = 0.0, comment: str = "") -> dict[str, Any]:
+        """Place a market order (BUY or SELL)."""
+        if mt5 is None or not self.connected:
+            return {"success": False, "message": "MT5 no conectado"}
+
+        self.ensure_symbol(symbol)
+        order_type = mt5.ORDER_TYPE_BUY if direction == "UP" else mt5.ORDER_TYPE_SELL
+        tick = mt5.symbol_info_tick(symbol)
+        if tick is None:
+            return {"success": False, "message": f"No se puede obtener precio para {symbol}"}
+
+        price = tick.ask if direction == "UP" else tick.bid
+
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": symbol,
+            "volume": float(volume),
+            "type": order_type,
+            "price": price,
+            "deviation": 20,
+            "magic": MAGIC_NUMBER,
+            "comment": comment or "TraderExpert",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+        if sl > 0:
+            request["sl"] = sl
+        if tp > 0:
+            request["tp"] = tp
+
+        logger.info("Sending order: %s %s %.2f lots @ %.5f (SL=%.5f, TP=%.5f)",
+                     direction, symbol, volume, price, sl, tp)
+        result = mt5.order_send(request)
+        if result is None:
+            return {"success": False, "message": f"order_send returned None: {mt5.last_error()}"}
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            logger.warning("Order failed: %s (retcode=%d)", result.comment, result.retcode)
+            return {"success": False, "message": f"Orden rechazada: {result.comment} (code {result.retcode})"}
+
+        logger.info("Order executed: ticket=%d, price=%.5f, volume=%.2f", result.order, result.price, result.volume)
+        return {
+            "success": True,
+            "ticket": int(result.order),
+            "price": float(result.price),
+            "volume": float(result.volume),
+        }
+
+    def close_position(self, ticket: int) -> dict[str, Any]:
+        """Close an open position by its ticket number."""
+        if mt5 is None or not self.connected:
+            return {"success": False, "message": "MT5 no conectado"}
+
+        positions = mt5.positions_get(ticket=ticket)
+        if not positions:
+            return {"success": False, "message": f"Posicion {ticket} no encontrada (ya cerrada?)"}
+
+        pos = positions[0]
+        close_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY
+        tick = mt5.symbol_info_tick(pos.symbol)
+        if tick is None:
+            return {"success": False, "message": f"No se puede obtener precio para {pos.symbol}"}
+
+        price = tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask
+
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": pos.symbol,
+            "volume": pos.volume,
+            "type": close_type,
+            "position": ticket,
+            "price": price,
+            "deviation": 20,
+            "magic": MAGIC_NUMBER,
+            "comment": "TraderExpert Close",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+
+        logger.info("Closing position: ticket=%d, %s %.2f lots @ %.5f",
+                     ticket, pos.symbol, pos.volume, price)
+        result = mt5.order_send(request)
+        if result is None:
+            return {"success": False, "message": f"close order_send returned None: {mt5.last_error()}"}
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            return {"success": False, "message": f"Cierre rechazado: {result.comment} (code {result.retcode})"}
+
+        logger.info("Position closed: ticket=%d, price=%.5f", ticket, result.price)
+        return {"success": True, "price": float(result.price), "profit": float(pos.profit)}
+
+    def get_open_positions(self) -> list[dict[str, Any]]:
+        """Get all open positions placed by TraderExpert."""
+        if mt5 is None or not self.connected:
+            return []
+        try:
+            positions = mt5.positions_get()
+            if not positions:
+                return []
+            return [
+                {
+                    "ticket": int(p.ticket),
+                    "symbol": str(p.symbol),
+                    "volume": float(p.volume),
+                    "type": "BUY" if p.type == 0 else "SELL",
+                    "price_open": float(p.price_open),
+                    "price_current": float(p.price_current),
+                    "profit": float(p.profit),
+                    "sl": float(p.sl),
+                    "tp": float(p.tp),
+                    "time": int(p.time),
+                    "magic": int(p.magic),
+                    "comment": str(p.comment),
+                }
+                for p in positions
+                if p.magic == MAGIC_NUMBER
+            ]
+        except Exception as exc:
+            logger.warning("Error listing positions: %s", exc)
+            return []

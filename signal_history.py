@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,7 @@ class SignalHistory:
     def __init__(self, filename="signals.json", max_entries=300):
         self.filepath = data_path(filename)
         self.max_entries = max_entries
+        self._lock = threading.Lock()
 
     def _read(self) -> list[dict[str, Any]]:
         if not self.filepath.exists():
@@ -40,34 +42,39 @@ class SignalHistory:
         temp_path.replace(self.filepath)
 
     def add(self, signal: dict[str, Any]) -> dict[str, Any]:
-        entries = self._read()
-        signal = dict(signal)
-        signal.setdefault("id", utc_now().strftime("%Y%m%d%H%M%S%f"))
-        entries = [signal] + [entry for entry in entries if entry.get("id") != signal["id"]]
-        self._write(entries)
-        return signal
+        with self._lock:
+            entries = self._read()
+            signal = dict(signal)
+            signal.setdefault("id", utc_now().strftime("%Y%m%d%H%M%S%f"))
+            entries = [signal] + [entry for entry in entries if entry.get("id") != signal["id"]]
+            self._write(entries)
+            return signal
 
     def update(self, signal_id: str, values: dict[str, Any]) -> dict[str, Any] | None:
-        entries = self._read()
-        updated = None
-        for entry in entries:
-            if entry.get("id") == signal_id:
-                entry.update(values)
-                updated = entry
-                break
-        if updated:
-            self._write(entries)
-        return updated
+        with self._lock:
+            entries = self._read()
+            updated = None
+            for entry in entries:
+                if entry.get("id") == signal_id:
+                    entry.update(values)
+                    updated = entry
+                    break
+            if updated:
+                self._write(entries)
+            return updated
 
     def list_entries(self) -> list[dict[str, Any]]:
-        return self._read()
+        with self._lock:
+            return self._read()
 
     def clear(self):
-        if self.filepath.exists():
-            self.filepath.unlink()
+        with self._lock:
+            if self.filepath.exists():
+                self.filepath.unlink()
 
     def pending(self) -> list[dict[str, Any]]:
-        return [entry for entry in self._read() if entry.get("status") == "OPEN"]
+        with self._lock:
+            return [entry for entry in self._read() if entry.get("status") == "OPEN"]
 
     @staticmethod
     def summarize(entries: list[dict[str, Any]], balance: float) -> dict[str, Any]:

@@ -41,6 +41,14 @@ class SettingsManager:
             "rag_directory": "rag_knowledge",
             "enable_rag": True,
             "language": "es",
+            "ai_provider": "openai",
+            "ai_model": "gpt-4o",
+            "ai_endpoint": "",
+            "ai_api_version": "2025-01-01-preview",
+            "trading_mode": "simulation",
+            "lot_size": 0.01,
+            "auto_sl_atr_multiplier": 1.5,
+            "auto_tp_ratio": 2.0,
         }
         self.settings = self.load_settings()
         self._cached_password = None
@@ -125,3 +133,54 @@ class SettingsManager:
             except Exception as exc:
                 logger.warning("Error al recuperar password de keyring: %s", exc)
         return ""
+
+    # ---- AI Provider API Key (keyring) ----
+
+    def get_ai_api_key(self) -> str:
+        if hasattr(self, '_cached_ai_key') and self._cached_ai_key:
+            return self._cached_ai_key
+        if keyring:
+            try:
+                service = f"{APP_NAME}_ai"
+                provider = str(self.settings.get("ai_provider", "openai"))
+                key = keyring.get_password(service, provider)
+                if key:
+                    self._cached_ai_key = key
+                    return key
+            except Exception as exc:
+                logger.warning("Error al recuperar AI API key de keyring: %s", exc)
+        # Fallback: try environment variable
+        import os
+        env_key = os.getenv("AZURE_API_KEY", "")
+        if env_key:
+            return env_key
+        return ""
+
+    def set_ai_api_key(self, key: str):
+        self._cached_ai_key = key
+        if keyring and key:
+            try:
+                service = f"{APP_NAME}_ai"
+                provider = str(self.settings.get("ai_provider", "openai"))
+                keyring.set_password(service, provider, key)
+            except Exception as exc:
+                logger.warning("No se pudo guardar AI API key en keyring: %s", exc)
+
+    def get_all_ai_api_keys(self) -> dict:
+        keys = {}
+        if keyring:
+            service = f"{APP_NAME}_ai"
+            for provider in ["openai", "azure", "deepseek", "claude", "gemini", "grok"]:
+                try:
+                    val = keyring.get_password(service, provider)
+                    if val:
+                        keys[provider] = val
+                except Exception:
+                    pass
+        import os
+        for env_var, prov in [("OPENAI_API_KEY", "openai"), ("AZURE_API_KEY", "azure"), ("DEEPSEEK_API_KEY", "deepseek"), ("CLAUDE_API_KEY", "claude"), ("GEMINI_API_KEY", "gemini"), ("GROK_API_KEY", "grok")]:
+            if prov not in keys:
+                val = os.getenv(env_var, "")
+                if val:
+                    keys[prov] = val
+        return keys

@@ -5,15 +5,15 @@ from datetime import timedelta
 from typing import Any
 
 import config
-from azure_client import AzureClient
+from ai_client import AIClient
 from rag_manager import RAGManager
 from signal_history import utc_now
 from technical_analysis import compute_features
 
 
 class PredictionEngine:
-    def __init__(self, ai: AzureClient | None = None, rag: RAGManager | None = None):
-        self.ai = ai or AzureClient()
+    def __init__(self, ai: AIClient | None = None, rag: RAGManager | None = None):
+        self.ai = ai or AIClient()
         self.rag = rag or RAGManager()
 
     @staticmethod
@@ -136,6 +136,7 @@ class PredictionEngine:
             "stake_amount": float(settings.get("stake_amount", 0.0)),
             "payout_percent": float(settings.get("payout_percent", 0.0)),
             "features": features,
+            "history_bars": bars[-40:] if bars else [],
         }
         if direction == "WAIT" and not signal["risk_flags"]:
             signal["risk_flags"] = ["confidence_below_threshold"]

@@ -51,14 +51,6 @@ def _env_float(name: str, default: float, min_value: float | None = None, max_va
     return value
 
 
-AZURE_ENDPOINT = os.getenv(
-    "AZURE_ENDPOINT",
-    "https://aievaluacioncne2.cognitiveservices.azure.com/openai/deployments/gpt-4o/chat/completions",
-)
-AZURE_API_KEY = os.getenv("AZURE_API_KEY", "")
-AZURE_API_VERSION = os.getenv("AZURE_API_VERSION", "2025-01-01-preview")
-AZURE_URL = f"{AZURE_ENDPOINT}?api-version={AZURE_API_VERSION}"
-
 REQUEST_TIMEOUT = _env_int("REQUEST_TIMEOUT", 60, min_value=10, max_value=180)
 MAX_RESPONSE_TOKENS = _env_int("MAX_RESPONSE_TOKENS", 1200, min_value=256, max_value=4096)
 AI_TEMPERATURE = _env_float("AI_TEMPERATURE", 0.1, min_value=0.0, max_value=1.0)

@@ -3,17 +3,21 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import threading
 import re
+import threading
 from pathlib import Path
 
 import webview
 
+from ai_client import PROVIDERS as AI_PROVIDERS
 from app_metadata import APP_VERSION
 from app_paths import resource_path
 
 logger = logging.getLogger(__name__)
 webview.settings["ALLOW_FILE_URLS"] = True
+
+
+from localization import LOCALIZATION_DICT
 
 
 class MainWindow:
@@ -298,7 +302,54 @@ header * { -webkit-app-region: no-drag; }
 .side-panel .card { flex: 1; display: flex; flex-direction: column; justify-content: center; min-height: 100px; }
 
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 32px; }
-.toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 12px; }
+.toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 8px; }
+.toolbar button {
+    height: 36px;
+    min-height: 36px;
+    padding: 0 16px;
+    font-size: 12px;
+    border-radius: var(--radius);
+}
+.toolbar .icon-btn {
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+}
+.btn-group {
+    display: inline-flex;
+    background: var(--input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    padding: 2px;
+    align-items: center;
+    gap: 2px;
+    height: 36px;
+}
+.btn-group .icon-btn {
+    width: 30px;
+    height: 30px;
+    min-height: 30px;
+    border-radius: calc(var(--radius) - 4px);
+    border: none;
+    background: transparent;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+.btn-group .icon-btn:hover {
+    background: var(--panel-2);
+    color: var(--strong);
+}
+.btn-group .icon-btn i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+}
 
 .signal-stage { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 24px; }
 .signal-panel {
@@ -412,6 +463,31 @@ header * { -webkit-app-region: no-drag; }
 }
 #tooltip.visible { opacity: 1; }
 
+#chart-tooltip {
+    position: fixed;
+    background: #1c1e1e;
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 10000;
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+#chart-tooltip.visible { opacity: 1; }
+#chart-tooltip canvas {
+    background: #0f1111;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.03);
+    width: 100%;
+    height: 140px;
+}
+
 .toast { position: fixed; right: 32px; bottom: 32px; background: var(--panel-2); border: 1px solid var(--border-strong); padding: 16px 24px; border-radius: 14px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); transform: translateY(120px); opacity: 0; transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 1000; font-weight: 500; }
 .toast.open { transform: translateY(0); opacity: 1; }
 
@@ -494,9 +570,9 @@ select option { background: var(--panel); color: var(--text); padding: 10px; }
         <span>{title}</span>
     </div>
     <div class="window-actions">
-        <button class="icon-btn" onclick="pywebview.api.minimize()" aria-label="Minimizar"><i class="fa-solid fa-minus"></i></button>
-        <button class="icon-btn" onclick="pywebview.api.toggle_fullscreen()" aria-label="Pantalla Completa"><i class="fa-solid fa-expand"></i></button>
-        <button class="icon-btn danger" onclick="pywebview.api.quit()" aria-label="Salir"><i class="fa-solid fa-xmark"></i></button>
+        <button class="icon-btn" onclick="pywebview.api.minimize()" data-t-aria="minimize_aria" aria-label="Minimizar"><i class="fa-solid fa-minus"></i></button>
+        <button class="icon-btn" onclick="pywebview.api.toggle_fullscreen()" data-t-aria="fullscreen_aria" aria-label="Pantalla Completa"><i class="fa-solid fa-expand"></i></button>
+        <button class="icon-btn danger" onclick="pywebview.api.quit()" data-t-aria="quit_aria" aria-label="Salir"><i class="fa-solid fa-xmark"></i></button>
     </div>
 </header>
 <div id="tooltip" class="tooltip"></div>
@@ -534,6 +610,8 @@ setTimeout(() => pywebview.api.route_after_splash().catch(() => {{}}), 2000);
 
     def _config_html(self, settings: dict) -> str:
         s = json.dumps(settings, ensure_ascii=False)
+        loc_json = json.dumps(LOCALIZATION_DICT, ensure_ascii=False)
+        providers_json = json.dumps(AI_PROVIDERS, ensure_ascii=False)
         return f"""
 <!DOCTYPE html>
 <html lang="es">
@@ -544,64 +622,63 @@ setTimeout(() => pywebview.api.route_after_splash().catch(() => {{}}), 2000);
     <section class="content">
         <div class="toolbar">
             <div>
-                <div class="card-label">Configuracion</div>
-                <h1 style="margin:4px 0 0;color:var(--strong);font-size:22px;">Personaliza tu experiencia</h1>
+                <div class="card-label" data-t="settings">Configuracion</div>
+                <h1 style="margin:4px 0 0;color:var(--strong);font-size:22px;" data-t="config_title">Personaliza tu experiencia</h1>
             </div>
         </div>
 
         <div class="stepper">
-            <div class="step active" id="step-1-ind"><div class="step-circle">1</div><div class="step-label">Conexion</div></div>
-            <div class="step" id="step-2-ind"><div class="step-circle">2</div><div class="step-label">Mercado</div></div>
-            <div class="step" id="step-3-ind"><div class="step-circle">3</div><div class="step-label">Simulacion</div></div>
-            <div class="step" id="step-4-ind"><div class="step-circle">4</div><div class="step-label">Estrategia</div></div>
+            <div class="step active" id="step-1-ind"><div class="step-circle">1</div><div class="step-label" data-t="step1_title">Conexion</div></div>
+            <div class="step" id="step-2-ind"><div class="step-circle">2</div><div class="step-label" data-t="step2_title">Mercado</div></div>
+            <div class="step" id="step-3-ind"><div class="step-circle">3</div><div class="step-label" data-t="step3_title">Simulacion</div></div>
+            <div class="step" id="step-4-ind"><div class="step-circle">4</div><div class="step-label" data-t="step4_title">Estrategia</div></div>
+            <div class="step" id="step-5-ind"><div class="step-circle">5</div><div class="step-label" data-t="step5_title">IA</div></div>
         </div>
 
         <form id="config-form">
             <!-- STEP 1: CONEXION -->
             <div class="step-content active" id="step-1">
                 <section class="form-section">
-                    <h2>Terminal MT5</h2>
-                    <div class="field"><label>Ruta MT5 (Opcional)</label><input name="mt5_path" placeholder="C:\\Program Files\\MetaTrader 5\\terminal64.exe"></div>
-                    <div class="field"><label>Cuenta</label><input name="mt5_account" placeholder="5043420806"></div>
-                    <div class="field"><label>Contraseña</label><input type="password" name="mt5_password" placeholder="••••••••"></div>
-                    <div class="field"><label>Servidor</label><input name="mt5_server" placeholder="MetaQuotes-Demo"></div>
+                    <h2 data-t="step1_header">Terminal MT5</h2>
+                    <div class="field"><label data-t="field_mt5_path">Ruta MT5 (Opcional)</label><input name="mt5_path" placeholder="C:\\Program Files\\MetaTrader 5\\terminal64.exe"></div>
+                    <div class="field"><label data-t="field_mt5_account">Cuenta</label><input name="mt5_account" placeholder="5043420806"></div>
+                    <div class="field"><label data-t="field_mt5_password">Contraseña</label><input type="password" name="mt5_password" placeholder="••••••••"></div>
+                    <div class="field"><label data-t="field_mt5_server">Servidor</label><input name="mt5_server" placeholder="MetaQuotes-Demo"></div>
                 </section>
             </div>
 
             <!-- STEP 2: MERCADO -->
             <div class="step-content" id="step-2">
                 <section class="form-section">
-                    <h2>Configuracion de Mercado</h2>
-                    <div class="field"><label>Tipo de mercado</label>
+                    <h2 data-t="step2_header">Configuracion de Mercado</h2>
+                    <div class="field"><label data-t="field_market_type">Tipo de mercado</label>
                         <select name="market_type">
-                            <option value="Forex">🌐 Forex</option>
-                            <option value="Indices">📊 Indices</option>
-                            <option value="Commodities">🥇 Commodities</option>
-                            <option value="Crypto">₿ Crypto</option>
-                            <option value="Acciones">🏢 Acciones</option>
+                            <option value="Forex" data-t="market_forex">🌐 Forex</option>
+                            <option value="Indices" data-t="market_indices">📊 Indices</option>
+                            <option value="Commodities" data-t="market_commodities">🥇 Commodities</option>
+                            <option value="Crypto" data-t="market_crypto">₿ Crypto</option>
+                            <option value="Acciones" data-t="market_acciones">🏢 Acciones</option>
                         </select>
                     </div>
                     <div class="field">
-                        <label>Activo (Símbolo)</label>
+                        <label data-t="field_active_symbol">Activo (Símbolo)</label>
                         <div style="display:flex; align-items:center; gap:12px;">
-                            <input name="symbol" list="symbols" placeholder="EURUSD" oninput="updateAssetPreview(this.value)" style="flex:1;">
+                            <select name="symbol" onchange="updateAssetPreview(this.value)" style="flex:1;">
+                                <option value="EURUSD">EURUSD</option>
+                            </select>
                             <div id="asset-preview" style="background:var(--panel-2); padding:0 16px; border-radius:var(--radius); border:1px solid var(--border); min-width:140px; height:44px; display:flex; align-items:center; justify-content:center;">-</div>
                         </div>
                     </div>
-                    <datalist id="symbols">
-                        <option value="EURUSD"><option value="GBPUSD"><option value="USDJPY"><option value="XAUUSD">
-                        <option value="US500"><option value="NAS100"><option value="BTCUSD">
-                    </datalist>
-                    <div class="field"><label>Temporalidad</label>
+                    <div class="field"><label data-t="field_timeframe">Temporalidad</label>
                         <select name="timeframe">
                             <option>M1</option><option>M2</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option>
                         </select>
                     </div>
-                    <div class="field"><label>Tipo de Gráfico</label>
+                    <div class="field"><label data-t="field_chart_type">Tipo de Gráfico</label>
                         <select name="chart_type">
-                            <option value="candles">🕯️ Velas</option>
-                            <option value="line">📈 Línea</option>
-                            <option value="bars">📊 Barras</option>
+                            <option value="candles" data-t="chart_candles">🕯️ Velas</option>
+                            <option value="line" data-t="chart_line">📈 Línea</option>
+                            <option value="bars" data-t="chart_bars">📊 Barras</option>
                         </select>
                     </div>
                 </section>
@@ -610,41 +687,64 @@ setTimeout(() => pywebview.api.route_after_splash().catch(() => {{}}), 2000);
             <!-- STEP 3: SIMULACION -->
             <div class="step-content" id="step-3">
                 <section class="form-section">
-                    <h2>Parámetros y Sonido</h2>
+                    <h2 data-t="step3_header">Parámetros y Sonido</h2>
                     <div class="grid" style="grid-template-columns: 1fr 1fr;">
-                        <div class="field"><label>Capital Virtual</label><input type="number" name="virtual_balance" step="0.01"></div>
-                        <div class="field"><label>Monto por Señal</label><input type="number" name="stake_amount" step="0.01"></div>
+                        <div class="field"><label data-t="field_virtual_balance">Capital Virtual</label><input type="number" name="virtual_balance" step="0.01"></div>
+                        <div class="field"><label data-t="field_stake_amount">Monto por Señal</label><input type="number" name="stake_amount" step="0.01"></div>
                     </div>
                     <div class="grid" style="grid-template-columns: 1fr 1fr;">
-                        <div class="field"><label>Payout %</label><input type="number" name="payout_percent" step="0.01"></div>
-                        <div class="field"><label>Confianza Mínima</label><input type="number" name="confidence_threshold" step="0.01" min="0.5" max="0.99"></div>
+                        <div class="field"><label data-t="field_payout_percent">Payout %</label><input type="number" name="payout_percent" step="0.01"></div>
+                        <div class="field"><label data-t="field_confidence_threshold">Confianza Mínima</label><input type="number" name="confidence_threshold" step="0.01" min="0.5" max="0.99"></div>
                     </div>
                     <div class="grid" style="grid-template-columns: 1fr 1fr;">
-                        <div class="field"><label>Horizonte Predicción (min)</label><input type="number" name="prediction_horizon_minutes" min="1"></div>
-                        <div class="field"><label>Intervalo Análisis (min)</label><input type="number" name="analysis_interval_minutes" min="1"></div>
+                        <div class="field"><label data-t="field_prediction_horizon">Horizonte Predicción (min)</label><input type="number" name="prediction_horizon_minutes" min="1"></div>
+                        <div class="field"><label data-t="field_analysis_interval">Intervalo Análisis (min)</label><input type="number" name="analysis_interval_minutes" min="1"></div>
                     </div>
-                    <div class="field"><label>Sonidos de Alerta</label>
+                    <div class="field"><label data-t="field_enable_sounds">Sonidos de Alerta</label>
                         <select name="enable_sounds">
-                            <option value="true">🔊 Activado</option>
-                            <option value="false">🔇 Desactivado</option>
+                            <option value="true" data-t="sounds_enabled">🔊 Activado</option>
+                            <option value="false" data-t="sounds_disabled">🔇 Desactivado</option>
                         </select>
+                    </div>
+
+                    <hr style="border:none; border-top:1px solid var(--border); margin:16px 0;">
+
+                    <div class="field">
+                        <label data-t="trading_mode_label">Modo de Operación</label>
+                        <select name="trading_mode" id="trading-mode-select" onchange="toggleTradingMode()">
+                            <option value="simulation" data-t="mode_simulation">🎮 Simulación</option>
+                            <option value="real" data-t="mode_real">💰 Cuenta Real</option>
+                        </select>
+                    </div>
+                    <div id="real-mode-warning" style="display:none; background: rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.3); border-radius:var(--radius); padding:12px; margin:8px 0;">
+                        <div style="display:flex; align-items:center; gap:8px; color:#EF4444; font-size:12px; font-weight:600;">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span data-t="real_mode_warning">⚠️ Operar en modo real implica riesgo de pérdida de capital</span>
+                        </div>
+                    </div>
+                    <div id="real-mode-fields" style="display:none;">
+                        <div class="grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                            <div class="field"><label data-t="field_lot_size">Volumen (Lotes)</label><input type="number" name="lot_size" step="0.01" min="0.01" max="100"></div>
+                            <div class="field"><label data-t="field_sl_multiplier">SL (ATR ×)</label><input type="number" name="auto_sl_atr_multiplier" step="0.1" min="0.5" max="5.0"></div>
+                            <div class="field"><label data-t="field_tp_ratio">TP Ratio (R:R)</label><input type="number" name="auto_tp_ratio" step="0.1" min="1.0" max="5.0"></div>
+                        </div>
                     </div>
                 </section>
             </div>
             <!-- STEP 4: ESTRATEGIA / RAG -->
             <div class="step-content" id="step-4">
                 <section class="form-section">
-                    <h2>Estrategia e Inteligencia (RAG)</h2>
+                    <h2 data-t="step4_header">Estrategia e Inteligencia (RAG)</h2>
                     <div class="field">
-                        <label>Instrucciones de Estrategia (Prompt)</label>
+                        <label data-t="field_strategy_prompt">Instrucciones de Estrategia (Prompt)</label>
                         <textarea name="strategy_prompt" style="width:100%; height:120px; padding:12px; border-radius:var(--radius); border:1px solid var(--border); background:var(--panel); color:var(--strong); font-family:inherit; resize:vertical;"></textarea>
                     </div>
                     <div class="field">
-                        <label>Carpeta de Conocimiento (RAG)</label>
+                        <label data-t="field_rag_directory">Carpeta de Conocimiento (RAG)</label>
                         <input name="rag_directory" placeholder="Ej: rag_knowledge">
                     </div>
                     <div class="field">
-                        <label>Idioma de Respuesta (IA)</label>
+                        <label data-t="field_lang_response">Idioma de Respuesta (IA)</label>
                         <input type="hidden" name="language" id="lang-input">
                         <div class="language-selector">
                             <div class="lang-option" data-lang="es" onclick="setLanguage('es')">
@@ -665,11 +765,30 @@ setTimeout(() => pywebview.api.route_after_splash().catch(() => {{}}), 2000);
                         </div>
                     </div>
                     <div class="field">
-                        <label>Uso de RAG / Entrenamiento</label>
+                        <label data-t="field_enable_rag">Uso de RAG / Entrenamiento</label>
                         <select name="enable_rag">
-                            <option value="true">✅ Activado</option>
-                            <option value="false">❌ Desactivado</option>
+                            <option value="true" data-t="rag_enabled">✅ Activado</option>
+                            <option value="false" data-t="rag_disabled">❌ Desactivado</option>
                         </select>
+                    </div>
+                </section>
+            </div>
+
+            <!-- STEP 5: AI PROVIDER -->
+            <div class="step-content" id="step-5">
+                <section class="form-section">
+                    <h2 data-t="step5_header">Proveedor de IA</h2>
+                    <input type="hidden" name="ai_provider" id="ai-provider-input">
+                    <div class="provider-grid" id="provider-grid"></div>
+
+                    <div id="ai-fields" style="margin-top:16px; display: flex; flex-direction: column; gap: 16px;"></div>
+
+                    <div style="margin-top:12px;">
+                        <button type="button" id="test-ai-btn" onclick="testAIConnection()" style="display:inline-flex; align-items:center; gap:8px; padding:10px 20px; background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); cursor:pointer; font-weight:600; font-size:12px; transition:all 0.2s ease;">
+                            <i class="fa-solid fa-plug"></i>
+                            <span data-t="btn_test_connection">Probar Conexion</span>
+                        </button>
+                        <span id="test-result" style="margin-left:12px; font-size:12px; font-weight:600;"></span>
                     </div>
                 </section>
             </div>
@@ -678,28 +797,57 @@ setTimeout(() => pywebview.api.route_after_splash().catch(() => {{}}), 2000);
     <section class="actions">
         <button onclick="pywebview.api.open_main()">
             <i class="fa-solid fa-house"></i>
-            <span>Volver al Inicio</span>
+            <span data-t="back_home">Volver al Inicio</span>
         </button>
         <div style="flex:1;"></div>
         <button id="prev-btn" style="display:none;" onclick="changeStep(-1)">
             <i class="fa-solid fa-chevron-left"></i>
-            <span>Anterior</span>
+            <span data-t="prev">Anterior</span>
         </button>
         <button id="next-btn" class="primary" onclick="changeStep(1)">
-            <span>Siguiente</span>
+            <span data-t="next">Siguiente</span>
             <i class="fa-solid fa-chevron-right"></i>
         </button>
         <button id="save-btn" class="primary" style="display:none;" onclick="saveConfig()">
             <i class="fa-solid fa-check"></i>
-            <span>Guardar e Iniciar</span>
+            <span data-t="save">Guardar e Iniciar</span>
         </button>
     </section>
 </main>
 <div class="toast" id="toast"></div>
 <script>
+const LOCALIZATION = {loc_json};
 const initial = {s};
 let currentStep = 1;
 const form = document.getElementById('config-form');
+
+function translateConfigPage(lang) {{
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
+    
+    // Translate standard texts
+    document.querySelectorAll('[data-t]').forEach(el => {{
+        const key = el.getAttribute('data-t');
+        if (dict[key]) {{
+            el.textContent = dict[key];
+        }}
+    }});
+    
+    // Translate input placeholders if dict has them
+    document.querySelectorAll('[data-t-placeholder]').forEach(el => {{
+        const key = el.getAttribute('data-t-placeholder');
+        if (dict[key]) {{
+            el.setAttribute('placeholder', dict[key]);
+        }}
+    }});
+
+    // Translate chrome actions
+    document.querySelectorAll('[data-t-aria]').forEach(el => {{
+        const key = el.getAttribute('data-t-aria');
+        if (dict[key]) {{
+            el.setAttribute('aria-label', dict[key]);
+        }}
+    }});
+}}
 
 function fill() {{
     for (const [key, value] of Object.entries(initial)) {{
@@ -711,6 +859,8 @@ function fill() {{
         }}
     }}
     updateAssetPreview(initial.symbol);
+    toggleTradingMode();
+    loadMT5Symbols();
 }}
 
 function setLanguage(lang) {{
@@ -718,6 +868,7 @@ function setLanguage(lang) {{
     document.querySelectorAll('.lang-option').forEach(opt => {{
         opt.classList.toggle('active', opt.dataset.lang === lang);
     }});
+    translateConfigPage(lang);
 }}
 
 function updateAssetPreview(val) {{
@@ -771,7 +922,7 @@ function renderAssetHTML(symbol, timeframe = "", compact = false) {{
 
 function changeStep(delta) {{
     const next = currentStep + delta;
-    if (next < 1 || next > 4) return;
+    if (next < 1 || next > 5) return;
     
     document.getElementById(`step-${{currentStep}}`).classList.remove('active');
     document.getElementById(`step-${{currentStep}}-ind`).classList.remove('active');
@@ -782,18 +933,63 @@ function changeStep(delta) {{
     document.getElementById(`step-${{currentStep}}-ind`).classList.add('active');
     
     document.getElementById('prev-btn').style.display = currentStep > 1 ? 'inline-flex' : 'none';
-    document.getElementById('next-btn').style.display = currentStep < 4 ? 'inline-flex' : 'none';
-    document.getElementById('save-btn').style.display = currentStep === 4 ? 'inline-flex' : 'none';
+    document.getElementById('next-btn').style.display = currentStep < 5 ? 'inline-flex' : 'none';
+    document.getElementById('save-btn').style.display = currentStep === 5 ? 'inline-flex' : 'none';
 }}
 
 function values() {{
     const data = Object.fromEntries(new FormData(form).entries());
-    const numerics = ['virtual_balance','stake_amount','payout_percent','confidence_threshold'];
+    const numerics = ['virtual_balance','stake_amount','payout_percent','confidence_threshold','lot_size','auto_sl_atr_multiplier','auto_tp_ratio'];
     numerics.forEach(k => data[k] = Number(data[k]));
     data.enable_sounds = data.enable_sounds === 'true';
     data.enable_rag = data.enable_rag === 'true';
     data.is_configured = true;
     return data;
+}}
+
+function toggleTradingMode() {{
+    const mode = document.getElementById('trading-mode-select').value;
+    document.getElementById('real-mode-warning').style.display = mode === 'real' ? 'block' : 'none';
+    document.getElementById('real-mode-fields').style.display = mode === 'real' ? 'block' : 'none';
+    // Show/hide simulation-only fields
+    const simFields = document.querySelectorAll('[name="virtual_balance"], [name="stake_amount"], [name="payout_percent"]');
+    simFields.forEach(f => {{
+        const field = f.closest('.field');
+        if (field) field.style.display = mode === 'real' ? 'none' : '';
+    }});
+}}
+
+async function loadMT5Symbols() {{
+    try {{
+        const result = await pywebview.api.get_mt5_symbols();
+        if (!result.success || !result.symbols.length) return;
+        const select = document.querySelector('[name="symbol"]');
+        if (!select || select.tagName !== 'SELECT') return;
+        const currentVal = select.value || initial.symbol || '';
+        select.innerHTML = '';
+        // Group by path
+        const groups = {{}};
+        result.symbols.forEach(s => {{
+            const parts = s.path.split('\\\\');
+            const group = parts.length > 1 ? parts[0] : 'Other';
+            if (!groups[group]) groups[group] = [];
+            groups[group].push(s);
+        }});
+        for (const [group, symbols] of Object.entries(groups)) {{
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = group;
+            symbols.forEach(s => {{
+                const opt = document.createElement('option');
+                opt.value = s.name;
+                opt.textContent = `${{s.name}} — ${{s.description}}`;
+                opt.selected = s.name === currentVal;
+                optgroup.appendChild(opt);
+            }});
+            select.appendChild(optgroup);
+        }}
+    }} catch (e) {{
+        // Silently fail - MT5 might not be connected
+    }}
 }}
 
 function showToast(message, error=false) {{
@@ -816,14 +1012,246 @@ async function saveConfig() {{
         btn.disabled = false;
     }}
 }}
+
+// ---- AI Provider Logic ----
+const AI_PROVIDERS = {providers_json};
+const PROVIDER_BRAND = {{
+    openai:   {{ color: '#10A37F', icon: 'fa-bolt',         label: 'OpenAI' }},
+    azure:    {{ color: '#0078D4', icon: 'fa-cloud',         label: 'Azure OpenAI' }},
+    deepseek: {{ color: '#4D6BFE', icon: 'fa-water',         label: 'DeepSeek' }},
+    claude:   {{ color: '#D97706', icon: 'fa-comment-dots',  label: 'Claude' }},
+    gemini:   {{ color: '#4285F4', icon: 'fa-star',          label: 'Gemini' }},
+    grok:     {{ color: '#E5E7EB', icon: 'fa-robot',         label: 'Grok' }},
+}};
+
+function renderProviderCards() {{
+    const grid = document.getElementById('provider-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    for (const [key, info] of Object.entries(AI_PROVIDERS)) {{
+        const brand = PROVIDER_BRAND[key] || {{ color: '#888', icon: 'fa-microchip', label: key }};
+        const card = document.createElement('div');
+        card.className = 'provider-card';
+        card.dataset.provider = key;
+        card.onclick = () => selectProvider(key);
+        card.innerHTML = `
+            <div class="provider-icon" style="background: ${{brand.color}}20; color: ${{brand.color}};">
+                <i class="fa-solid ${{brand.icon}}"></i>
+            </div>
+            <div class="provider-name">${{info.name}}</div>
+            <div class="provider-check"><i class="fa-solid fa-circle-check"></i></div>
+        `;
+        grid.appendChild(card);
+    }}
+}}
+
+function selectProvider(key) {{
+    document.getElementById('ai-provider-input').value = key;
+    document.querySelectorAll('.provider-card').forEach(c => {{
+        c.classList.toggle('selected', c.dataset.provider === key);
+    }});
+    renderAIFields(key);
+    // Clear test result
+    document.getElementById('test-result').textContent = '';
+}}
+
+function renderAIFields(provider) {{
+    const container = document.getElementById('ai-fields');
+    if (!container) return;
+    const lang = document.getElementById('lang-input')?.value || 'es';
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
+    const info = AI_PROVIDERS[provider] || {{}};
+    const fields = info.fields || [];
+    
+    let html = '';
+    
+    if (fields.includes('api_key')) {{
+        html += `
+            <div class="field">
+                <label data-t="field_ai_api_key">${{dict.field_ai_api_key || 'API Key'}}</label>
+                <div style="position:relative;">
+                    <input type="password" name="ai_api_key" id="ai-key-input" 
+                           placeholder="${{dict.ai_key_placeholder || 'sk-... o tu API Key'}}" 
+                           autocomplete="off"
+                           style="padding-right:40px;">
+                    <button type="button" onclick="toggleKeyVisibility()" 
+                            style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); cursor:pointer; padding:4px;">
+                        <i class="fa-solid fa-eye" id="key-toggle-icon"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }}
+    
+    if (fields.includes('endpoint')) {{
+        html += `
+            <div class="field">
+                <label data-t="field_ai_endpoint">${{dict.field_ai_endpoint || 'Endpoint (URL)'}}</label>
+                <input name="ai_endpoint" placeholder="${{dict.ai_endpoint_placeholder || 'https://tu-recurso.openai.azure.com/...'}}" autocomplete="off">
+            </div>
+        `;
+    }}
+    
+    if (fields.includes('api_version')) {{
+        html += `
+            <div class="field">
+                <label data-t="field_ai_api_version">${{dict.field_ai_api_version || 'Version API'}}</label>
+                <input name="ai_api_version" value="2025-01-01-preview" autocomplete="off">
+            </div>
+        `;
+    }}
+    
+    if (fields.includes('model')) {{
+        const models = info.models || [];
+        const options = models.map(m => `<option value="${{m}}">${{m}}</option>`).join('');
+        html += `
+            <div class="field">
+                <label data-t="field_ai_model">${{dict.field_ai_model || 'Modelo'}}</label>
+                <select name="ai_model">${{options}}</select>
+            </div>
+        `;
+    }}
+    
+    container.innerHTML = html;
+    
+    // Restore saved API key from keyring for the selected provider
+    const savedKeys = initial.ai_api_keys || {{}};
+    const keyForProvider = savedKeys[provider] || (initial.ai_provider === provider ? (initial.ai_api_key || '') : '');
+    if (keyForProvider && container.querySelector('[name="ai_api_key"]')) {{
+        container.querySelector('[name="ai_api_key"]').value = keyForProvider;
+    }}
+    
+    // Restore saved values for the active provider
+    if (initial.ai_provider === provider) {{
+        if (initial.ai_endpoint && container.querySelector('[name="ai_endpoint"]')) {{
+            container.querySelector('[name="ai_endpoint"]').value = initial.ai_endpoint;
+        }}
+        if (initial.ai_api_version && container.querySelector('[name="ai_api_version"]')) {{
+            container.querySelector('[name="ai_api_version"]').value = initial.ai_api_version;
+        }}
+        if (initial.ai_model && container.querySelector('[name="ai_model"]')) {{
+            container.querySelector('[name="ai_model"]').value = initial.ai_model;
+        }}
+    }}
+}}
+
+function toggleKeyVisibility() {{
+    const input = document.getElementById('ai-key-input');
+    const icon = document.getElementById('key-toggle-icon');
+    if (input.type === 'password') {{
+        input.type = 'text';
+        icon.className = 'fa-solid fa-eye-slash';
+    }} else {{
+        input.type = 'password';
+        icon.className = 'fa-solid fa-eye';
+    }}
+}}
+
+async function testAIConnection() {{
+    const btn = document.getElementById('test-ai-btn');
+    const result = document.getElementById('test-result');
+    const lang = document.getElementById('lang-input')?.value || 'es';
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
+    
+    btn.disabled = true;
+    result.textContent = dict.testing || 'Probando...';
+    result.style.color = 'var(--muted)';
+    
+    try {{
+        // Save current values first so backend can test with them
+        const data = values();
+        await pywebview.api.save_config(data);
+        const res = await pywebview.api.test_ai_connection();
+        if (res.success) {{
+            result.textContent = (dict.test_success || '✅ Conexion exitosa') + (res.model ? ` (${{res.model}})` : '');
+            result.style.color = '#10B981';
+        }} else {{
+            result.textContent = (dict.test_fail || '❌ Error') + ': ' + (res.message || 'Unknown');
+            result.style.color = '#EF4444';
+        }}
+    }} catch (e) {{
+        result.textContent = (dict.test_fail || '❌ Error') + ': ' + String(e.message || e);
+        result.style.color = '#EF4444';
+    }} finally {{
+        btn.disabled = false;
+    }}
+}}
+
+// Initialize provider cards
+renderProviderCards();
+selectProvider(initial.ai_provider || 'openai');
+
 fill();
 </script>
+<style>
+.provider-grid {{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}}
+.provider-card {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 8px;
+    background: var(--panel);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+}}
+.provider-card:hover {{
+    border-color: var(--accent);
+    background: var(--panel-2);
+    transform: translateY(-2px);
+}}
+.provider-card.selected {{
+    border-color: var(--accent);
+    background: rgba(139, 92, 246, 0.08);
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+}}
+.provider-icon {{
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    transition: transform 0.2s ease;
+}}
+.provider-card:hover .provider-icon {{
+    transform: scale(1.1);
+}}
+.provider-name {{
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--strong);
+    text-align: center;
+    letter-spacing: 0.02em;
+}}
+.provider-check {{
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 14px;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}}
+.provider-card.selected .provider-check {{
+    opacity: 1;
+}}
+</style>
 </body>
 </html>
 """
 
     def _main_html(self, payload: dict) -> str:
         data = json.dumps(payload, ensure_ascii=False)
+        loc_json = json.dumps(LOCALIZATION_DICT, ensure_ascii=False)
         return f"""
 <!DOCTYPE html>
 <html lang="es">
@@ -834,46 +1262,65 @@ fill();
     <section class="content">
         <header class="toolbar">
             <div class="toolbar-left">
+                <!-- Sleek Primary Actions -->
                 <button id="action-btn" class="primary" onclick="toggleEngine()">
                     <i class="fa-solid fa-play"></i>
-                    <span>Iniciar</span>
+                    <span data-t="btn_start">Iniciar</span>
                 </button>
                 <button id="analyze-btn" onclick="runAnalysisNow()">
                     <i class="fa-solid fa-bolt"></i>
-                    <span>Analizar ahora</span>
+                    <span data-t="analyze">Analizar</span>
                 </button>
-                <div style="width:1px; height:24px; background:var(--border); margin:0 8px;"></div>
-                <button class="icon-btn" onclick="confirmResetBalance()" onmouseenter="showTooltip(event, 'Restablecer balance virtual')" onmouseleave="hideTooltip()">
-                    <i class="fa-solid fa-rotate-left"></i>
-                </button>
-                <button class="icon-btn" onclick="confirmClearHistory()" onmouseenter="showTooltip(event, 'Limpiar historial de señales')" onmouseleave="hideTooltip()">
-                    <i class="fa-solid fa-trash-can"></i>
-                </button>
-                <button class="icon-btn" onclick="exportData()" onmouseenter="showTooltip(event, 'Exportar historial a CSV')" onmouseleave="hideTooltip()">
-                    <i class="fa-solid fa-download"></i>
-                </button>
+                
+                <div style="width:1px; height:20px; background:var(--border); margin:0 4px;"></div>
+                
+                <!-- Sleek Pill-shaped Utility Button Group -->
+                <div class="btn-group">
+                    <button class="icon-btn" onclick="confirmResetBalance()" data-tip-key="tip_reset" data-tip="Restablecer balance virtual" onmouseover="showTip(this, event)" onmouseout="hideTip()">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                    <button class="icon-btn" onclick="confirmClearHistory()" data-tip-key="tip_clear" data-tip="Limpiar historial de señales" onmouseover="showTip(this, event)" onmouseout="hideTip()">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                    <button class="icon-btn" onclick="exportData()" data-tip-key="tip_export" data-tip="Exportar historial a CSV" onmouseover="showTip(this, event)" onmouseout="hideTip()">
+                        <i class="fa-solid fa-download"></i>
+                    </button>
+                </div>
             </div>
             <div class="toolbar-right">
-                <div style="display:flex; align-items:center; gap:8px; background:var(--panel); padding:4px 16px; border-radius:var(--radius); border:1px solid var(--border);">
-                    <input type="date" id="filter-date" onchange="applyFilter()" style="height:32px; border:none; background:transparent; width:130px; font-size:12px; padding:0;">
+                <!-- MT5 Connection State Badge -->
+                <div id="mt5-badge" style="display:inline-flex; align-items:center; gap:8px; background:rgba(0,0,0,0.15); padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border); font-size:11px; font-weight:700; transition: all 0.3s ease; height: 36px;">
+                    <i class="fa-solid fa-circle" id="mt5-indicator-dot" style="font-size:8px; color:var(--muted); transition: color 0.3s ease;"></i>
+                    <span id="mt5-indicator-text" style="text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);">MT5</span>
                 </div>
+                <!-- Market Status Badge -->
+                <div id="market-badge" style="display:inline-flex; align-items:center; gap:8px; background:rgba(0,0,0,0.15); padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border); font-size:11px; font-weight:700; transition: all 0.3s ease; height: 36px;">
+                    <i class="fa-solid fa-circle" id="market-indicator-dot" style="font-size:8px; color:#EF4444; transition: color 0.3s ease;"></i>
+                    <span id="market-indicator-text" style="text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);">Mercado</span>
+                </div>
+                <!-- Sleek Compact Date Filter -->
+                <div style="display:flex; align-items:center; gap:8px; background:var(--panel); padding:0 12px; border-radius:var(--radius); border:1px solid var(--border); height: 36px;">
+                    <input type="date" id="filter-date" onchange="applyFilter()" style="height:34px; border:none; background:transparent; width:130px; font-size:11px; padding:0; line-height:34px;">
+                </div>
+                <!-- Compact Config Button -->
                 <button onclick="pywebview.api.open_config()">
                     <i class="fa-solid fa-gear"></i>
-                    <span>Configuracion</span>
+                    <span data-t="settings">Configuracion</span>
                 </button>
             </div>
         </header>
-        <section class="cards">
-            <div class="card"><div class="card-label">Saldo virtual</div><div class="card-value" id="balance">$0.00</div></div>
-            <div class="card"><div class="card-label">Activo</div><div class="card-value" id="active-asset">-</div></div>
-            <div class="card"><div class="card-label">Ganadas</div><div class="card-value" id="wins">0</div></div>
-            <div class="card"><div class="card-label">Perdidas</div><div class="card-value" id="losses">0</div></div>
+        <section class="cards" id="dashboard-cards-grid">
+            <div class="card"><div class="card-label" id="balance-label" data-t="virtual_balance">Saldo virtual</div><div class="card-value" id="balance">$0.00</div></div>
+            <div class="card" id="equity-card" style="display:none;"><div class="card-label" data-t="equity_label">Equity Real</div><div class="card-value" id="equity">$0.00</div></div>
+            <div class="card"><div class="card-label" data-t="active_symbol">Activo</div><div class="card-value" id="active-asset">-</div></div>
+            <div class="card"><div class="card-label" data-t="wins">Ganadas</div><div class="card-value" id="wins">0</div></div>
+            <div class="card"><div class="card-label" data-t="losses">Perdidas</div><div class="card-value" id="losses">0</div></div>
         </section>
         <section class="signal-stage" style="margin-top:20px;">
             <div class="signal-panel" id="signal-container">
                 <div class="scanning-ring"></div>
                 <div class="scanning-ring"></div>
-                <div class="scanning-label">Escaneando mercado...</div>
+                <div class="scanning-label" data-t="scanning_market">Escaneando mercado...</div>
                 <div id="signal-content">
                     <i id="signal-icon" class="signal-icon wait fa-solid fa-hand"></i>
                     <div class="signal-label" id="signal-label">ESPERAR</div>
@@ -881,14 +1328,22 @@ fill();
                 </div>
             </div>
             <aside class="side-panel">
-                <div class="card"><div class="card-label">Confianza</div><div class="card-value" id="confidence">0%</div></div>
-                <div class="card"><div class="card-label">Estado del Motor</div><div class="card-value" id="engine-state" style="font-size:16px;">Detenido</div></div>
-                <div class="card"><div class="card-label">Riesgos detectados</div><div class="strong" id="risks" style="margin-top:8px;font-size:13px;line-height:1.6;max-height:80px;overflow-y:auto;padding-right:4px;">-</div></div>
-                <div class="card"><div class="card-label">Contexto externo</div><div class="strong" id="external-context" style="margin-top:8px;font-size:12px;max-height:120px;overflow-y:auto;padding-right:4px;">-</div></div>
+                <div class="card"><div class="card-label" data-t="confidence">Confianza</div><div class="card-value" id="confidence">0%</div></div>
+                <div class="card"><div class="card-label" data-t="engine_state">Estado del Motor</div><div class="card-value" id="engine-state" style="font-size:16px;">Detenido</div></div>
+                <div class="card"><div class="card-label" data-t="detected_risks">Riesgos detectados</div><div class="strong" id="risks" style="margin-top:8px;font-size:13px;line-height:1.6;max-height:80px;overflow-y:auto;padding-right:4px;">-</div></div>
+                <div class="card"><div class="card-label" data-t="external_context">Contexto externo</div><div class="strong" id="external-context" style="margin-top:8px;font-size:12px;max-height:120px;overflow-y:auto;padding-right:4px;">-</div></div>
             </aside>
         </section>
         <section class="history">
-            <div class="history-head"><span>Fecha</span><span>Activo</span><span>Senal</span><span>Estado</span><span>Conf.</span><span>Razon del analisis</span><span class="optional">Delta</span></div>
+            <div class="history-head">
+                <span data-t="history_date">Fecha</span>
+                <span data-t="history_asset">Activo</span>
+                <span data-t="history_signal">Senal</span>
+                <span data-t="history_status">Estado</span>
+                <span data-t="history_confidence">Conf.</span>
+                <span data-t="history_reason">Razon del analisis</span>
+                <span class="optional" data-t="history_delta">Delta</span>
+            </div>
             <div id="history-body" style="max-height: 400px; min-height: 200px; overflow-y: auto;"></div>
             <div class="pagination">
                 <button class="pagination-btn icon-btn" onclick="changePage(-1)" id="prev-page"><i class="fa-solid fa-chevron-left"></i></button>
@@ -898,13 +1353,24 @@ fill();
         </section>
     </section>
 </main>
-<div id="tooltip"></div>
+<div id="tooltip" class="tooltip"></div>
+<div id="chart-tooltip">
+    <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; font-weight:700; margin-bottom: 2px;">
+        <span id="ct-symbol" style="color:var(--text);">-</span>
+        <span id="ct-direction" class="pill" style="font-size:9px; padding:2px 8px; letter-spacing: 0.05em;">UP</span>
+    </div>
+    <canvas id="ct-canvas" width="296" height="140"></canvas>
+    <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-top: 2px;">
+        <span id="ct-entry-wrap">Entrada: <strong id="ct-entry" style="color:var(--strong);">-</strong></span>
+        <span id="ct-exit-wrap">Salida: <strong id="ct-exit" style="color:var(--strong);">-</strong></span>
+    </div>
+</div>
 <div class="modal-overlay" id="modal-overlay">
     <div class="modal">
         <div class="modal-title" id="modal-title"><i class="fa-solid fa-circle-question"></i> Confirmar</div>
         <div class="modal-text" id="modal-text">¿Estás seguro de realizar esta acción?</div>
         <div class="modal-actions">
-            <button class="modal-btn cancel" onclick="closeModal()">Cancelar</button>
+            <button class="modal-btn cancel" id="modal-cancel-btn" onclick="closeModal()">Cancelar</button>
             <button class="modal-btn confirm" id="modal-confirm-btn">Confirmar</button>
         </div>
     </div>
@@ -914,10 +1380,39 @@ fill();
 <audio id="audio-signal" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
 
 <script>
+const LOCALIZATION = {loc_json};
 let state = {data};
 let currentPage = 1;
 const pageSize = 10;
 let filterDate = '';
+
+function translatePage(lang) {{
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
+    
+    // Translate standard texts
+    document.querySelectorAll('[data-t]').forEach(el => {{
+        const key = el.getAttribute('data-t');
+        if (dict[key]) {{
+            el.textContent = dict[key];
+        }}
+    }});
+    
+    // Translate tooltips
+    document.querySelectorAll('[data-tip-key]').forEach(el => {{
+        const key = el.getAttribute('data-tip-key');
+        if (dict[key]) {{
+            el.setAttribute('data-tip', dict[key]);
+        }}
+    }});
+
+    // Translate window action labels (aria)
+    document.querySelectorAll('[data-t-aria]').forEach(el => {{
+        const key = el.getAttribute('data-t-aria');
+        if (dict[key]) {{
+            el.setAttribute('aria-label', dict[key]);
+        }}
+    }});
+}}
 
 function playSound(type) {{
     if (!state.settings?.enable_sounds) return;
@@ -931,24 +1426,27 @@ function toggleEngine() {{
 }}
 
 async function runAnalysisNow() {{
+    const lang = state.settings?.language || 'es';
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
     const btn = document.getElementById('analyze-btn');
     const container = document.getElementById('signal-container');
     btn.disabled = true;
     container.classList.add('scanning');
-    document.getElementById('signal-label').textContent = 'ESCANEANDO...';
+    document.getElementById('signal-label').textContent = dict['scanning_market'] || 'ESCANEANDO...';
     
     try {{
         const result = await pywebview.api.run_analysis_now();
         if (!result.success) showToast(result.message, true);
     }} catch (e) {{
-        showToast("Error de conexión", true);
+        showToast(dict['toast_connection_error'] || "Error de conexión", true);
     }} finally {{
         btn.disabled = false;
-        // Scanning class will be removed by renderState when signals update
     }}
 }}
 
 async function startEngine() {{
+    const lang = state.settings?.language || 'es';
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
     const btn = document.getElementById('action-btn');
     btn.disabled = true;
     const result = await pywebview.api.start_engine();
@@ -957,6 +1455,8 @@ async function startEngine() {{
 }}
 
 async function stopEngine() {{
+    const lang = state.settings?.language || 'es';
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
     const btn = document.getElementById('action-btn');
     btn.disabled = true;
     const result = await pywebview.api.stop_engine();
@@ -965,6 +1465,8 @@ async function stopEngine() {{
 }}
 
 async function exportData() {{
+    const lang = state.settings?.language || 'es';
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
     const res = await pywebview.api.export_csv();
     if (res.success) {{
         const blob = new Blob([res.csv], {{ type: 'text/csv' }});
@@ -976,9 +1478,9 @@ async function exportData() {{
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
-        showToast("Historial exportado con éxito");
+        showToast(dict['toast_export_success'] || "Historial exportado con éxito");
     }} else {{
-        showToast(res.message || "Error al exportar", true);
+        showToast(res.message || dict['toast_export_error'] || "Error al exportar", true);
     }}
 }}
 
@@ -1000,8 +1502,54 @@ function renderState(next) {{
     const oldSignals = state.signals || [];
     state = next;
     
+    const lang = state.settings?.language || 'es';
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
+
     if ((state.signals || []).length > oldSignals.length) {{
         playSound('signal');
+    }}
+
+    // Apply localization dictionary
+    translatePage(lang);
+
+    // Update MT5 Connection Badge
+    const mt5Badge = document.getElementById('mt5-badge');
+    const mt5Dot = document.getElementById('mt5-indicator-dot');
+    const mt5Text = document.getElementById('mt5-indicator-text');
+    if (mt5Badge && mt5Dot && mt5Text) {{
+        if (state.mt5_connected) {{
+            mt5Dot.style.color = '#10B981';
+            mt5Text.textContent = 'MT5';
+            mt5Text.style.color = 'var(--text)';
+            mt5Badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+            mt5Badge.style.background = 'rgba(16, 185, 129, 0.08)';
+        }} else {{
+            mt5Dot.style.color = '#EF4444';
+            mt5Text.textContent = (dict['mt5_not_connected'] || 'MT5 Sin Conexión');
+            mt5Text.style.color = 'var(--muted)';
+            mt5Badge.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+            mt5Badge.style.background = 'rgba(239, 68, 68, 0.05)';
+        }}
+    }}
+
+    // Update Market Status Badge
+    const marketBadge = document.getElementById('market-badge');
+    const marketDot = document.getElementById('market-indicator-dot');
+    const marketText = document.getElementById('market-indicator-text');
+    if (marketBadge && marketDot && marketText) {{
+        if (state.market_open) {{
+            marketDot.style.color = '#10B981';
+            marketText.textContent = (dict['market_open'] || 'Mercado Abierto');
+            marketText.style.color = 'var(--text)';
+            marketBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+            marketBadge.style.background = 'rgba(16, 185, 129, 0.08)';
+        }} else {{
+            marketDot.style.color = '#EF4444';
+            marketText.textContent = (dict['market_closed'] || 'Mercado Cerrado');
+            marketText.style.color = 'var(--muted)';
+            marketBadge.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+            marketBadge.style.background = 'rgba(239, 68, 68, 0.05)';
+        }}
     }}
 
     // Filtering
@@ -1018,7 +1566,31 @@ function renderState(next) {{
     document.getElementById('losses').textContent = filteredLosses;
     
     const summary = state.summary || {{}};
-    document.getElementById('balance').textContent = '$' + (summary.balance || 0).toFixed(2);
+    const tradingMode = state.settings?.trading_mode || 'simulation';
+    const balanceLabel = document.getElementById('balance-label');
+    const equityCard = document.getElementById('equity-card');
+
+    if (tradingMode === 'real') {{
+        if (balanceLabel) balanceLabel.textContent = dict['real_balance'] || 'Saldo Real';
+        if (equityCard) equityCard.style.display = '';
+        if (state.account_info) {{
+            document.getElementById('balance').textContent = '$' + (state.account_info.balance || 0).toFixed(2);
+            document.getElementById('equity').textContent = '$' + (state.account_info.equity || 0).toFixed(2);
+            
+            if (balanceLabel && state.account_info.server) {{
+                const isDemo = state.account_info.trade_mode === 0;
+                const modeStr = isDemo ? 'DEMO' : 'REAL';
+                balanceLabel.innerHTML = `${{dict['real_balance'] || 'Saldo Real'}} <span style="font-size:10px; color:var(--muted); font-weight:normal; margin-left:6px;">(${{state.account_info.server}} - ${{modeStr}})</span>`;
+            }}
+        }} else {{
+            document.getElementById('balance').textContent = '$ --';
+            document.getElementById('equity').textContent = '$ --';
+        }}
+    }} else {{
+        if (balanceLabel) balanceLabel.textContent = dict['virtual_balance'] || 'Saldo Virtual';
+        if (equityCard) equityCard.style.display = 'none';
+        document.getElementById('balance').textContent = '$' + (summary.balance || 0).toFixed(2);
+    }}
     
     const assetEl = document.getElementById('active-asset');
     assetEl.innerHTML = renderAssetHTML(state.settings?.symbol, state.settings?.timeframe);
@@ -1027,19 +1599,19 @@ function renderState(next) {{
     if (state.engine_running) {{
         actionBtn.classList.add('active');
         actionBtn.querySelector('i').className = 'fa-solid fa-pause';
-        actionBtn.querySelector('span').textContent = 'Pausar';
-        document.getElementById('engine-state').textContent = 'Activo';
+        actionBtn.querySelector('span').textContent = dict['btn_pause'] || 'Pausar';
+        document.getElementById('engine-state').textContent = dict['state_active'] || 'Activo';
         document.getElementById('engine-state').style.color = 'var(--success)';
     }} else {{
         actionBtn.classList.remove('active');
         actionBtn.querySelector('i').className = 'fa-solid fa-play';
-        actionBtn.querySelector('span').textContent = 'Iniciar';
-        document.getElementById('engine-state').textContent = 'Detenido';
+        actionBtn.querySelector('span').textContent = dict['btn_start'] || 'Iniciar';
+        document.getElementById('engine-state').textContent = dict['state_stopped'] || 'Detenido';
         document.getElementById('engine-state').style.color = 'var(--muted)';
     }}
 
     const latest = signals[0] || {{}};
-    const [icon, cls, label] = signalClass(latest.direction);
+    const [icon, cls, label] = signalClass(latest.direction, lang);
     const iconEl = document.getElementById('signal-icon');
     const contentEl = document.getElementById('signal-content');
     
@@ -1052,8 +1624,14 @@ function renderState(next) {{
     iconEl.className = `signal-icon ${{cls}} fa-solid ${{icon}}`;
     document.getElementById('signal-label').textContent = label;
     document.getElementById('confidence').textContent = Math.round((latest.confidence || 0) * 100) + '%';
-    document.getElementById('signal-meta').textContent = latest.reason || 'Esperando analisis.';
-    document.getElementById('risks').textContent = (latest.risk_flags || []).join(', ') || 'Ninguno detectado';
+    
+    if (latest.reason) {{
+        document.getElementById('signal-meta').textContent = latest.reason;
+    }} else {{
+        document.getElementById('signal-meta').textContent = dict['waiting_session'] || 'Esperando inicio de sesion.';
+    }}
+    
+    document.getElementById('risks').textContent = (latest.risk_flags || []).join(', ') || dict['no_risks'] || 'Ninguno detectado';
     
     const ext = latest.external_context || {{}};
     const sourcesCount = (ext.sources || []).length;
@@ -1069,14 +1647,14 @@ function renderState(next) {{
                  data-tip="${{tooltipContent}}"
                  onmouseover="showTip(this, event)" 
                  onmouseout="hideTip()">
-                <span style="color:var(--accent); font-weight:700;">${{sourcesCount}} fuentes conectadas</span>
-                <span class="muted">${{itemsCount}} eventos/noticias procesados</span>
+                <span style="color:var(--accent); font-weight:700;">${{sourcesCount}} ${{dict['connected_sources'] || 'fuentes conectadas'}}</span>
+                <span class="muted">${{itemsCount}} ${{dict['events_processed'] || 'eventos/noticias procesados'}}</span>
             </div>
         `;
     }} else {{
         document.getElementById('external-context').innerHTML = `
             <div style="display:flex; align-items:center; gap:10px;">
-                <span class="dim" style="font-style:italic;">Buscando eventos de mercado...</span>
+                <span class="dim" style="font-style:italic;">${{dict['searching_events'] || 'Buscando eventos de mercado...'}}</span>
                 <i class="fa-solid fa-spinner fa-spin" style="color:var(--accent); font-size:12px;"></i>
             </div>
         `;
@@ -1090,22 +1668,38 @@ function renderState(next) {{
     const startIdx = (currentPage - 1) * pageSize;
     const pageSignals = signals.slice(startIdx, startIdx + pageSize);
     
-    document.getElementById('page-info').textContent = `Pagina ${{currentPage}} de ${{totalPages}}`;
+    const pageTemplate = dict['page_info'] || "Pagina {{page}} de {{total}}";
+    document.getElementById('page-info').textContent = pageTemplate.replace('{{page}}', currentPage).replace('{{total}}', totalPages);
     document.getElementById('prev-page').disabled = currentPage === 1;
     document.getElementById('next-page').disabled = currentPage === totalPages;
 
-    document.getElementById('history-body').innerHTML = pageSignals.map(item => {{
+    document.getElementById('history-body').innerHTML = pageSignals.map((item, idx) => {{
+        const absoluteIdx = startIdx + idx;
         const d = new Date(item.created_at);
         const dateStr = d.toLocaleDateString([], {{day:'2-digit', month:'2-digit'}});
         const timeStr = d.toLocaleTimeString([], {{hour:'2-digit', minute:'2-digit', second:'2-digit'}});
+        
+        let signalLabelStr = item.direction;
+        if (item.direction === 'UP') signalLabelStr = dict['signal_buy'] || 'COMPRA';
+        else if (item.direction === 'DOWN') signalLabelStr = dict['signal_sell'] || 'VENTA';
+        else if (item.direction === 'WAIT') signalLabelStr = dict['signal_wait'] || 'ESPERAR';
+        
         return `
         <div class="history-row">
-            <span style="font-size:11px; white-space:nowrap;">
+            <span style="font-size:11px; white-space:nowrap; cursor:help;"
+                  onmouseover="showChartTip(${{absoluteIdx}}, event)"
+                  onmouseout="hideChartTip()"
+                  onmousemove="moveChartTip(event)">
                 <span style="color:var(--muted);">${{dateStr}}</span>
                 <span style="color:var(--strong); font-weight:700; margin-left:4px;">${{timeStr}}</span>
             </span>
-            <span>${{renderAssetHTML(item.symbol || state.settings?.symbol, "", true)}}</span>
-            <span><span class="pill ${{item.direction?.toLowerCase()}}">${{item.direction}}</span></span>
+            <span style="cursor:help;"
+                  onmouseover="showChartTip(${{absoluteIdx}}, event)"
+                  onmouseout="hideChartTip()"
+                  onmousemove="moveChartTip(event)">
+                ${{renderAssetHTML(item.symbol || state.settings?.symbol, "", true)}}
+            </span>
+            <span><span class="pill ${{item.direction?.toLowerCase()}}">${{signalLabelStr}}</span></span>
             <span><span class="pill ${{item.status}}">${{item.status}}</span></span>
             <span>${{Math.round(item.confidence * 100)}}%</span>
             <span class="muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;padding-right:10px;" 
@@ -1116,8 +1710,8 @@ function renderState(next) {{
     `}}).join('') || `
         <div class="empty-history">
             <i class="fa-solid fa-folder-open"></i>
-            <h3>No hay señales registradas</h3>
-            <p>Las señales aparecerán aquí automáticamente una vez que inicies el análisis de mercado.</p>
+            <h3 data-t="no_signals_title">${{dict['no_signals_title'] || 'No hay señales registradas'}}</h3>
+            <p data-t="no_signals_desc">${{dict['no_signals_desc'] || 'Las señales aparecerán aquí automáticamente una vez que inicies el análisis de mercado.'}}</p>
         </div>
     `;
 }}
@@ -1138,6 +1732,193 @@ function showTip(el, e) {{
 function hideTip() {{
     const tip = document.getElementById('tooltip');
     if (tip) tip.classList.remove('visible');
+}}
+
+function showChartTip(index, e) {{
+    const tip = document.getElementById('chart-tooltip');
+    const canvas = document.getElementById('ct-canvas');
+    if (!tip || !canvas) return;
+
+    const signals = (state.signals || []).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    const sig = signals[index];
+    if (!sig) return;
+
+    const lang = state.settings?.language || 'es';
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
+
+    document.getElementById('ct-symbol').textContent = `${{sig.symbol}} (${{sig.timeframe}})`;
+    
+    let directionLabelStr = sig.direction;
+    if (sig.direction === 'UP') directionLabelStr = dict['signal_buy'] || 'COMPRA';
+    else if (sig.direction === 'DOWN') directionLabelStr = dict['signal_sell'] || 'VENTA';
+    else if (sig.direction === 'WAIT') directionLabelStr = dict['signal_wait'] || 'ESPERAR';
+
+    const dirEl = document.getElementById('ct-direction');
+    dirEl.textContent = directionLabelStr;
+    dirEl.className = `pill ${{sig.direction?.toLowerCase()}}`;
+
+    const entryLabelWrap = document.getElementById('ct-entry-wrap');
+    if (entryLabelWrap) {{
+        entryLabelWrap.innerHTML = `${{dict['tooltip_entry'] || 'Entrada'}}: <strong id="ct-entry" style="color:var(--strong);">${{sig.entry_price ? sig.entry_price.toFixed(5) : '-'}}</strong>`;
+    }}
+    
+    const exitWrap = document.getElementById('ct-exit-wrap');
+    if (sig.exit_price) {{
+        exitWrap.style.display = 'block';
+        exitWrap.innerHTML = `${{dict['tooltip_exit'] || 'Salida'}}: <strong id="ct-exit" style="color:var(--strong);">${{sig.exit_price.toFixed(5)}}</strong>`;
+    }} else {{
+        exitWrap.style.display = 'none';
+    }}
+
+    tip.classList.add('visible');
+    
+    // Position immediately
+    let x = e.clientX + 15;
+    let y = e.clientY + 15;
+    const width = 320;
+    const height = 210;
+    if (x + width > window.innerWidth) {{
+        x = e.clientX - width - 15;
+    }}
+    if (y + height > window.innerHeight) {{
+        y = e.clientY - height - 15;
+    }}
+    tip.style.left = x + 'px';
+    tip.style.top = y + 'px';
+
+    drawChart(canvas, sig, lang);
+}}
+
+function hideChartTip() {{
+    const tip = document.getElementById('chart-tooltip');
+    if (tip) tip.classList.remove('visible');
+}}
+
+function moveChartTip(e) {{
+    const tip = document.getElementById('chart-tooltip');
+    if (tip && tip.classList.contains('visible')) {{
+        let x = e.clientX + 15;
+        let y = e.clientY + 15;
+        const width = 320;
+        const height = 210;
+        if (x + width > window.innerWidth) {{
+            x = e.clientX - width - 15;
+        }}
+        if (y + height > window.innerHeight) {{
+            y = e.clientY - height - 15;
+        }}
+        tip.style.left = x + 'px';
+        tip.style.top = y + 'px';
+    }}
+}}
+
+function drawChart(canvas, sig, lang) {{
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    const bars = sig.history_bars || [];
+    if (bars.length === 0) {{
+        ctx.fillStyle = '#6B7280';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(dict['no_history_chart'] || 'Gráfico histórico no disponible', canvas.width / 2, canvas.height / 2);
+        return;
+    }}
+    
+    let prices = bars.flatMap(b => [b.high, b.low]);
+    if (sig.entry_price) prices.push(sig.entry_price);
+    if (sig.exit_price) prices.push(sig.exit_price);
+    
+    const maxPrice = Math.max(...prices);
+    const minPrice = Math.min(...prices);
+    
+    const padTop = 15;
+    const padBottom = 15;
+    const chartHeight = canvas.height - padTop - padBottom;
+    const priceRange = maxPrice - minPrice || 0.00001;
+    
+    function getPosVal(price) {{
+        return padTop + chartHeight * (1 - (price - minPrice) / priceRange);
+    }}
+    
+    // Draw background grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 4; i++) {{
+        const y = padTop + (chartHeight / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+    }}
+    
+    // Draw candlesticks
+    const spacing = canvas.width / bars.length;
+    const barWidth = Math.max(2, spacing - 2);
+    
+    bars.forEach((bar, idx) => {{
+        const x = idx * spacing + spacing / 2;
+        const yOpen = getPosVal(bar.open);
+        const yClose = getPosVal(bar.close);
+        const yHigh = getPosVal(bar.high);
+        const yLow = getPosVal(bar.low);
+        
+        const isUp = bar.close >= bar.open;
+        const color = isUp ? '#10B981' : '#EF4444';
+        
+        // Draw wick
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, yHigh);
+        ctx.lineTo(x, yLow);
+        ctx.stroke();
+        
+        // Draw body
+        ctx.fillStyle = color;
+        const bodyHeight = Math.max(1.5, Math.abs(yClose - yOpen));
+        ctx.fillRect(x - barWidth / 2, Math.min(yOpen, yClose), barWidth, bodyHeight);
+    }});
+    
+    // Draw entry line
+    if (sig.entry_price) {{
+        const yEntry = getPosVal(sig.entry_price);
+        ctx.strokeStyle = sig.direction === 'UP' ? 'rgba(16, 185, 129, 0.5)' : sig.direction === 'DOWN' ? 'rgba(239, 68, 68, 0.5)' : 'rgba(245, 158, 11, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(0, yEntry);
+        ctx.lineTo(canvas.width, yEntry);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        ctx.fillStyle = sig.direction === 'UP' ? '#10B981' : sig.direction === 'DOWN' ? '#EF4444' : '#F59E0B';
+        ctx.font = 'bold 8px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(dict['tooltip_entry']?.toUpperCase() || 'ENTRADA', 6, yEntry - 3);
+    }}
+    
+    // Draw exit line
+    if (sig.exit_price) {{
+        const yExit = getPosVal(sig.exit_price);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(0, yExit);
+        ctx.lineTo(canvas.width, yExit);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 8px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(dict['tooltip_exit']?.toUpperCase() || 'SALIDA', canvas.width - 6, yExit - 3);
+    }}
 }}
 window.onmousemove = (e) => {{
     const tip = document.getElementById('tooltip');
@@ -1191,17 +1972,25 @@ function renderAssetHTML(symbol, timeframe = "", compact = false) {{
     `;
 }}
 
-function signalClass(dir) {{
+function signalClass(dir, lang) {{
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
     dir = String(dir || 'WAIT').toUpperCase();
-    if (dir === 'UP') return ['fa-arrow-up', 'up', 'COMPRA'];
-    if (dir === 'DOWN') return ['fa-arrow-down', 'down', 'VENTA'];
-    return ['fa-hand', 'wait', 'ESPERAR'];
+    if (dir === 'UP') return ['fa-arrow-up', 'up', dict['signal_buy'] || 'COMPRA'];
+    if (dir === 'DOWN') return ['fa-arrow-down', 'down', dict['signal_sell'] || 'VENTA'];
+    return ['fa-hand', 'wait', dict['signal_wait'] || 'ESPERAR'];
 }}
 
 let modalCallback = null;
 function openModal(title, text, confirmLabel, isDanger, callback) {{
+    const lang = state.settings?.language || 'es';
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
+
     document.getElementById('modal-title').innerHTML = `<i class="fa-solid ${{isDanger ? 'fa-triangle-exclamation' : 'fa-circle-question'}}"></i> ${{title}}`;
     document.getElementById('modal-text').textContent = text;
+    
+    const cancelBtn = document.getElementById('modal-cancel-btn');
+    if (cancelBtn) cancelBtn.textContent = dict['modal_cancel'] || 'Cancelar';
+
     const btn = document.getElementById('modal-confirm-btn');
     btn.textContent = confirmLabel;
     btn.className = 'modal-btn confirm' + (isDanger ? ' danger' : '');
@@ -1218,17 +2007,21 @@ document.getElementById('modal-confirm-btn').onclick = () => {{
 }};
 
 function confirmResetBalance() {{
-    openModal('Restablecer Balance', '¿Deseas restablecer el balance virtual a su estado inicial? Esto no afectará tu historial.', 'Restablecer', false, () => {{
+    const lang = state.settings?.language || 'es';
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
+    openModal(dict['modal_reset_title'] || 'Restablecer Balance', dict['modal_reset_text'] || '¿Deseas restablecer el balance virtual a su estado inicial? Esto no afectará tu historial.', dict['modal_reset_confirm'] || 'Restablecer', false, () => {{
         pywebview.api.reset_balance().then(res => {{
-            if (res.success) showToast('Balance restablecido correctamente', false);
+            if (res.success) showToast(dict['toast_balance_reset'] || 'Balance restablecido correctamente', false);
         }});
     }});
 }}
 
 function confirmClearHistory() {{
-    openModal('Limpiar Historial', '¿Deseas eliminar todo el historial de señales? Esta acción no se puede deshacer.', 'Eliminar Todo', true, () => {{
+    const lang = state.settings?.language || 'es';
+    const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
+    openModal(dict['modal_clear_title'] || 'Limpiar Historial', dict['modal_clear_text'] || '¿Deseas eliminar todo el historial de señales? Esta acción no se puede deshacer.', dict['modal_clear_confirm'] || 'Eliminar Todo', true, () => {{
         pywebview.api.clear_history().then(res => {{
-            if (res.success) showToast('Historial eliminado', false);
+            if (res.success) showToast(dict['toast_history_cleared'] || 'Historial eliminado', false);
         }});
     }});
 }}
@@ -1240,6 +2033,61 @@ function showToast(msg, err) {{
     if (err) playSound('error');
     setTimeout(() => t.className = 'toast', 4000);
 }}
+
+// Periodic status check (every 10 seconds)
+setInterval(async () => {{
+    try {{
+        const res = await pywebview.api.get_market_status();
+        
+        // Update badges
+        const lang = state.settings?.language || 'es';
+        const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
+
+        const mt5Badge = document.getElementById('mt5-badge');
+        const mt5Dot = document.getElementById('mt5-indicator-dot');
+        const mt5Text = document.getElementById('mt5-indicator-text');
+        if (mt5Badge && mt5Dot && mt5Text) {{
+            if (res.mt5_connected) {{
+                mt5Dot.style.color = '#10B981';
+                mt5Text.textContent = 'MT5';
+                mt5Text.style.color = 'var(--text)';
+                mt5Badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                mt5Badge.style.background = 'rgba(16, 185, 129, 0.08)';
+            }} else {{
+                mt5Dot.style.color = '#EF4444';
+                mt5Text.textContent = (dict['mt5_not_connected'] || 'MT5 Sin Conexión');
+                mt5Text.style.color = 'var(--muted)';
+                mt5Badge.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+                mt5Badge.style.background = 'rgba(239, 68, 68, 0.05)';
+            }}
+        }}
+
+        const marketBadge = document.getElementById('market-badge');
+        const marketDot = document.getElementById('market-indicator-dot');
+        const marketText = document.getElementById('market-indicator-text');
+        if (marketBadge && marketDot && marketText) {{
+            if (res.market_open) {{
+                marketDot.style.color = '#10B981';
+                marketText.textContent = (dict['market_open'] || 'Mercado Abierto');
+                marketText.style.color = 'var(--text)';
+                marketBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                marketBadge.style.background = 'rgba(16, 185, 129, 0.08)';
+            }} else {{
+                marketDot.style.color = '#EF4444';
+                marketText.textContent = (dict['market_closed'] || 'Mercado Cerrado');
+                marketText.style.color = 'var(--muted)';
+                marketBadge.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+                marketBadge.style.background = 'rgba(239, 68, 68, 0.05)';
+            }}
+        }}
+
+        // Real-time balance and equity if real trading mode is active
+        if (state.settings?.trading_mode === 'real' && res.mt5_connected && res.account_info) {{
+            document.getElementById('balance').textContent = '$' + (res.account_info.balance || 0).toFixed(2);
+            document.getElementById('equity').textContent = '$' + (res.account_info.equity || 0).toFixed(2);
+        }}
+    }} catch(e) {{}}
+}}, 10000);
 
 renderState(state);
 </script>
@@ -1326,12 +2174,21 @@ class WebAPI:
             })
         return {"success": True, "csv": output.getvalue()}
 
+    def test_ai_connection(self):
+        return self._app.test_ai_connection()
+
+    def get_mt5_symbols(self):
+        return self._app.get_mt5_symbols()
+
+    def get_market_status(self):
+        return self._app.get_market_status()
+
     def quit(self):
         self._defer(self._app.quit)
         return {"success": True}
 
     @staticmethod
-    def _defer(callback):
-        timer = threading.Timer(0.05, callback)
+    def _defer(callback, delay=0.25):
+        timer = threading.Timer(delay, callback)
         timer.daemon = True
         timer.start()
