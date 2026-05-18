@@ -283,7 +283,9 @@ header * { -webkit-app-region: no-drag; }
 /* Stepper */
 .stepper { display: flex; justify-content: space-between; margin-bottom: 40px; position: relative; padding: 0 60px; }
 .stepper::before { content: ''; position: absolute; top: 16px; left: 60px; right: 60px; height: 2px; background: var(--border-strong); z-index: 0; }
-.step { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.step { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer; transition: all 0.2s ease; }
+.step:hover .step-circle { border-color: var(--accent); color: var(--strong); transform: scale(1.05); }
+.step.active:hover .step-circle { transform: none; }
 .step-circle { width: 34px; height: 34px; border-radius: 50%; background: var(--panel); border: 2px solid var(--border-strong); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; transition: all 0.3s ease; color: var(--muted); }
 .step.active .step-circle { background: var(--accent); border-color: var(--accent); color: white; box-shadow: 0 0 15px rgba(59, 130, 246, 0.4); }
 .step.completed .step-circle { background: var(--accent); border-color: var(--accent); color: white; }
@@ -628,11 +630,11 @@ setTimeout(() => pywebview.api.route_after_splash().catch(() => {{}}), 2000);
         </div>
 
         <div class="stepper">
-            <div class="step active" id="step-1-ind"><div class="step-circle">1</div><div class="step-label" data-t="step1_title">Conexion</div></div>
-            <div class="step" id="step-2-ind"><div class="step-circle">2</div><div class="step-label" data-t="step2_title">Mercado</div></div>
-            <div class="step" id="step-3-ind"><div class="step-circle">3</div><div class="step-label" data-t="step3_title">Simulacion</div></div>
-            <div class="step" id="step-4-ind"><div class="step-circle">4</div><div class="step-label" data-t="step4_title">Estrategia</div></div>
-            <div class="step" id="step-5-ind"><div class="step-circle">5</div><div class="step-label" data-t="step5_title">IA</div></div>
+            <div class="step active" id="step-1-ind" onclick="goToStep(1)"><div class="step-circle">1</div><div class="step-label" data-t="step1_title">Conexion</div></div>
+            <div class="step" id="step-2-ind" onclick="goToStep(2)"><div class="step-circle">2</div><div class="step-label" data-t="step2_title">Mercado</div></div>
+            <div class="step" id="step-3-ind" onclick="goToStep(3)"><div class="step-circle">3</div><div class="step-label" data-t="step3_title">Simulacion</div></div>
+            <div class="step" id="step-4-ind" onclick="goToStep(4)"><div class="step-circle">4</div><div class="step-label" data-t="step4_title">Estrategia</div></div>
+            <div class="step" id="step-5-ind" onclick="goToStep(5)"><div class="step-circle">5</div><div class="step-label" data-t="step5_title">IA</div></div>
         </div>
 
         <form id="config-form">
@@ -934,13 +936,23 @@ function renderAssetHTML(symbol, timeframe = "", compact = false) {{
     `;
 }}
 
-function changeStep(delta) {{
-    const next = currentStep + delta;
+function goToStep(next) {{
     if (next < 1 || next > 5) return;
     
     document.getElementById(`step-${{currentStep}}`).classList.remove('active');
     document.getElementById(`step-${{currentStep}}-ind`).classList.remove('active');
-    if (delta > 0) document.getElementById(`step-${{currentStep}}-ind`).classList.add('completed');
+    
+    // Update completed states for all steps
+    for (let i = 1; i <= 5; i++) {{
+        const ind = document.getElementById(`step-${{i}}-ind`);
+        if (ind) {{
+            if (i < next) {{
+                ind.classList.add('completed');
+            }} else {{
+                ind.classList.remove('completed');
+            }}
+        }}
+    }}
     
     currentStep = next;
     document.getElementById(`step-${{currentStep}}`).classList.add('active');
@@ -949,6 +961,10 @@ function changeStep(delta) {{
     document.getElementById('prev-btn').style.display = currentStep > 1 ? 'inline-flex' : 'none';
     document.getElementById('next-btn').style.display = currentStep < 5 ? 'inline-flex' : 'none';
     document.getElementById('save-btn').style.display = currentStep === 5 ? 'inline-flex' : 'none';
+}}
+
+function changeStep(delta) {{
+    goToStep(currentStep + delta);
 }}
 
 function values() {{
