@@ -139,6 +139,9 @@ LOCALIZATION_DICT = {
         "next_analysis_in": "Siguiente análisis en",
         "next_analysis": "Próximo análisis",
         "analyzing": "Analizando...",
+        "tip_analyze": "Realizar análisis inmediato",
+        "tip_analyze_disabled": "Inicia el motor para poder analizar",
+        "toast_engine_stopped": "El motor está detenido. Inícialo antes de analizar.",
     },
     "en": {
         "app_title": "TraderExpert",
@@ -278,6 +281,9 @@ LOCALIZATION_DICT = {
         "next_analysis_in": "Next analysis in",
         "next_analysis": "Next analysis",
         "analyzing": "Analyzing...",
+        "tip_analyze": "Perform immediate analysis",
+        "tip_analyze_disabled": "Start the engine to enable analysis",
+        "toast_engine_stopped": "The engine is stopped. Start it before analyzing.",
     },
     "pt": {
         "app_title": "TraderExpert",
@@ -417,6 +423,9 @@ LOCALIZATION_DICT = {
         "next_analysis_in": "Próxima análise em",
         "next_analysis": "Próxima análise",
         "analyzing": "Analisando...",
+        "tip_analyze": "Realizar análise imediata",
+        "tip_analyze_disabled": "Inicie o motor para poder analisar",
+        "toast_engine_stopped": "O motor está parado. Inicie-o antes de analisar.",
     },
     "fr": {
         "app_title": "TraderExpert",
@@ -556,6 +565,9 @@ LOCALIZATION_DICT = {
         "next_analysis_in": "Prochaine analyse dans",
         "next_analysis": "Prochaine analyse",
         "analyzing": "Analyse en cours...",
+        "tip_analyze": "Effectuer une analyse immédiate",
+        "tip_analyze_disabled": "Démarrez le moteur pour activer l'analyse",
+        "toast_engine_stopped": "Le moteur est arrêté. Démarrez-le avant d'analyser.",
     },
     "de": {
         "app_title": "TraderExpert",
@@ -695,5 +707,8 @@ LOCALIZATION_DICT = {
         "next_analysis_in": "Nächste Analyse in",
         "next_analysis": "Nächste Analyse",
         "analyzing": "Analysieren...",
+        "tip_analyze": "Sofortige Analyse durchführen",
+        "tip_analyze_disabled": "Starten Sie den Motor, um die Analyse zu aktivieren",
+        "toast_engine_stopped": "Der Motor ist gestoppt. Starten Sie ihn vor der Analyse.",
     }
 }

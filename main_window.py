@@ -1281,7 +1281,7 @@ fill();
                     <i class="fa-solid fa-play"></i>
                     <span data-t="btn_start">Iniciar</span>
                 </button>
-                <button id="analyze-btn" onclick="runAnalysisNow()">
+                <button id="analyze-btn" onclick="runAnalysisNow()" data-tip-key="tip_analyze" data-tip="Realizar análisis inmediato" onmouseover="showTip(this, event)" onmouseout="hideTip()">
                     <i class="fa-solid fa-bolt"></i>
                     <span data-t="analyze">Analizar</span>
                 </button>
@@ -1435,6 +1435,12 @@ function toggleEngine() {{
 }}
 
 async function runAnalysisNow() {{
+    if (!state.engine_running) {{
+        const lang = state.settings?.language || 'es';
+        const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
+        showToast(dict['toast_engine_stopped'] || 'El motor está detenido. Inícialo antes de analizar.', true);
+        return;
+    }}
     const lang = state.settings?.language || 'es';
     const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
     const btn = document.getElementById('analyze-btn');
@@ -1603,6 +1609,23 @@ function renderState(next) {{
         actionBtn.querySelector('span').textContent = dict['btn_start'] || 'Iniciar';
         document.getElementById('engine-state').textContent = dict['state_stopped'] || 'Detenido';
         document.getElementById('engine-state').style.color = 'var(--muted)';
+    }}
+    
+    const analyzeBtn = document.getElementById('analyze-btn');
+    if (analyzeBtn) {{
+        if (state.engine_running) {{
+            analyzeBtn.disabled = false;
+            analyzeBtn.style.opacity = '1';
+            analyzeBtn.style.cursor = 'pointer';
+            analyzeBtn.setAttribute('data-tip-key', 'tip_analyze');
+            analyzeBtn.setAttribute('data-tip', dict['tip_analyze'] || 'Realizar análisis inmediato');
+        }} else {{
+            analyzeBtn.disabled = true;
+            analyzeBtn.style.opacity = '0.4';
+            analyzeBtn.style.cursor = 'not-allowed';
+            analyzeBtn.setAttribute('data-tip-key', 'tip_analyze_disabled');
+            analyzeBtn.setAttribute('data-tip', dict['tip_analyze_disabled'] || 'Inicia el motor para poder analizar');
+        }}
     }}
 
     const latest = signals[0] || {{}};
