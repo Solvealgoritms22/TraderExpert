@@ -38,19 +38,19 @@ PROVIDERS = {
         "fields": ["api_key", "model"],
     },
     "claude": {
-        "name": "Claude (Anthropic)",
+        "name": "Anthropi",
         "base_url": "https://api.anthropic.com/v1/messages",
         "models": ["claude-sonnet-4-20250514", "claude-opus-4-20250514", "claude-3-5-haiku-20241022"],
         "fields": ["api_key", "model"],
     },
     "gemini": {
-        "name": "Gemini (Google)",
+        "name": "Gemini",
         "base_url": "https://generativelanguage.googleapis.com/v1beta",
         "models": ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
         "fields": ["api_key", "model"],
     },
     "grok": {
-        "name": "Grok (xAI)",
+        "name": "xAI",
         "base_url": "https://api.x.ai/v1/chat/completions",
         "models": ["grok-3", "grok-3-mini", "grok-3-fast"],
         "fields": ["api_key", "model"],

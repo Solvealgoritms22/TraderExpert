@@ -555,6 +555,134 @@ select option { background: var(--panel); color: var(--text); padding: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* Chart Type Selector */
+.chart-type-selector {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 8px;
+}
+.chart-option {
+    background: var(--input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+.chart-option img {
+    height: 48px;
+    width: auto;
+    max-width: 48px;
+    object-fit: contain;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+    transition: transform 0.3s ease;
+}
+.chart-option span {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    transition: color 0.2s ease;
+}
+.chart-option:hover {
+    border-color: var(--border-strong);
+    background: var(--panel-2);
+    transform: translateY(-2px);
+}
+.chart-option:hover img {
+    transform: scale(1.1);
+}
+.chart-option.active {
+    border-color: var(--accent);
+    background: rgba(74, 110, 130, 0.08);
+    box-shadow: 0 0 0 1px var(--accent), 0 8px 20px rgba(59, 130, 246, 0.15);
+}
+.chart-option.active span {
+    color: var(--strong);
+}
+.chart-option.active img {
+    transform: scale(1.05);
+}
+
+/* RAG Toggle Selector */
+.rag-toggle-selector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 8px;
+}
+.rag-option {
+    background: var(--input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 20px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.rag-option i {
+    font-size: 16px;
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+.rag-option span {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    transition: color 0.2s ease;
+}
+.rag-option:hover {
+    border-color: var(--border-strong);
+    background: var(--panel-2);
+}
+.rag-option:hover i {
+    transform: scale(1.15);
+}
+/* Activado Style */
+.rag-option[data-value="true"]:hover i {
+    color: var(--success);
+}
+.rag-option[data-value="true"].active {
+    border-color: var(--success);
+    background: rgba(16, 185, 129, 0.08);
+    box-shadow: 0 0 0 1px var(--success), 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+.rag-option[data-value="true"].active i {
+    color: var(--success);
+    transform: scale(1.05);
+}
+.rag-option[data-value="true"].active span {
+    color: var(--strong);
+}
+
+/* Desactivado Style */
+.rag-option[data-value="false"]:hover i {
+    color: var(--danger);
+}
+.rag-option[data-value="false"].active {
+    border-color: var(--danger);
+    background: rgba(239, 68, 68, 0.08);
+    box-shadow: 0 0 0 1px var(--danger), 0 4px 12px rgba(239, 68, 68, 0.15);
+}
+.rag-option[data-value="false"].active i {
+    color: var(--danger);
+    transform: scale(1.05);
+}
+.rag-option[data-value="false"].active span {
+    color: var(--strong);
+}
 """ + "</style>"
         )
 
@@ -614,6 +742,65 @@ setTimeout(() => pywebview.api.route_after_splash().catch(() => {{}}), 2000);
         s = json.dumps(settings, ensure_ascii=False)
         loc_json = json.dumps(LOCALIZATION_DICT, ensure_ascii=False)
         providers_json = json.dumps(AI_PROVIDERS, ensure_ascii=False)
+
+        candles_path = resource_path("images/icon_candles.png")
+        line_path = resource_path("images/icon_line.png")
+        bars_path = resource_path("images/icon_bars.png")
+
+        candles_base64 = ""
+        line_base64 = ""
+        bars_base64 = ""
+
+        encoded_candles = self._get_file_base64(candles_path)
+        if encoded_candles:
+            candles_base64 = f"data:image/png;base64,{encoded_candles}"
+
+        encoded_line = self._get_file_base64(line_path)
+        if encoded_line:
+            line_base64 = f"data:image/png;base64,{encoded_line}"
+
+        encoded_bars = self._get_file_base64(bars_path)
+        if encoded_bars:
+            bars_base64 = f"data:image/png;base64,{encoded_bars}"
+
+        openai_path = resource_path("images/openai.svg")
+        azure_path = resource_path("images/azure.svg")
+        grok_path = resource_path("images/grok.svg")
+        deepseek_path = resource_path("images/deepseek.svg")
+        claude_path = resource_path("images/claude.svg")
+        gemini_path = resource_path("images/gemini.svg")
+
+        openai_base64 = ""
+        azure_base64 = ""
+        grok_base64 = ""
+        deepseek_base64 = ""
+        claude_base64 = ""
+        gemini_base64 = ""
+
+        encoded_openai = self._get_file_base64(openai_path)
+        if encoded_openai:
+            openai_base64 = f"data:image/svg+xml;base64,{encoded_openai}"
+
+        encoded_azure = self._get_file_base64(azure_path)
+        if encoded_azure:
+            azure_base64 = f"data:image/svg+xml;base64,{encoded_azure}"
+
+        encoded_grok = self._get_file_base64(grok_path)
+        if encoded_grok:
+            grok_base64 = f"data:image/svg+xml;base64,{encoded_grok}"
+
+        encoded_deepseek = self._get_file_base64(deepseek_path)
+        if encoded_deepseek:
+            deepseek_base64 = f"data:image/svg+xml;base64,{encoded_deepseek}"
+
+        encoded_claude = self._get_file_base64(claude_path)
+        if encoded_claude:
+            claude_base64 = f"data:image/svg+xml;base64,{encoded_claude}"
+
+        encoded_gemini = self._get_file_base64(gemini_path)
+        if encoded_gemini:
+            gemini_base64 = f"data:image/svg+xml;base64,{encoded_gemini}"
+
         return f"""
 <!DOCTYPE html>
 <html lang="es">
@@ -654,7 +841,7 @@ setTimeout(() => pywebview.api.route_after_splash().catch(() => {{}}), 2000);
                 <section class="form-section">
                     <h2 data-t="step2_header">Configuracion de Mercado</h2>
                     <div class="field"><label data-t="field_market_type">Tipo de mercado</label>
-                        <select name="market_type">
+                        <select name="market_type" onchange="updateSymbolsByMarketType()">
                             <option value="Forex" data-t="market_forex">🌐 Forex</option>
                             <option value="Indices" data-t="market_indices">📊 Indices</option>
                             <option value="Commodities" data-t="market_commodities">🥇 Commodities</option>
@@ -676,12 +863,23 @@ setTimeout(() => pywebview.api.route_after_splash().catch(() => {{}}), 2000);
                             <option>M1</option><option>M2</option><option>M5</option><option>M15</option><option>M30</option><option>H1</option>
                         </select>
                     </div>
-                    <div class="field"><label data-t="field_chart_type">Tipo de Gráfico</label>
-                        <select name="chart_type">
-                            <option value="candles" data-t="chart_candles">🕯️ Velas</option>
-                            <option value="line" data-t="chart_line">📈 Línea</option>
-                            <option value="bars" data-t="chart_bars">📊 Barras</option>
-                        </select>
+                    <div class="field">
+                        <label data-t="field_chart_type">Tipo de Gráfico</label>
+                        <input type="hidden" name="chart_type" id="chart-type-input">
+                        <div class="chart-type-selector">
+                            <div class="chart-option" data-value="candles" onclick="selectChartType('candles')">
+                                <img src="{candles_base64}" alt="Velas">
+                                <span data-t="chart_candles">Velas</span>
+                            </div>
+                            <div class="chart-option" data-value="line" onclick="selectChartType('line')">
+                                <img src="{line_base64}" alt="Línea">
+                                <span data-t="chart_line">Línea</span>
+                            </div>
+                            <div class="chart-option" data-value="bars" onclick="selectChartType('bars')">
+                                <img src="{bars_base64}" alt="Barras">
+                                <span data-t="chart_bars">Barras</span>
+                            </div>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -780,10 +978,17 @@ setTimeout(() => pywebview.api.route_after_splash().catch(() => {{}}), 2000);
                     </div>
                     <div class="field">
                         <label data-t="field_enable_rag">Uso de RAG / Entrenamiento</label>
-                        <select name="enable_rag">
-                            <option value="true" data-t="rag_enabled">✅ Activado</option>
-                            <option value="false" data-t="rag_disabled">❌ Desactivado</option>
-                        </select>
+                        <input type="hidden" name="enable_rag" id="enable-rag-input">
+                        <div class="rag-toggle-selector">
+                            <div class="rag-option" data-value="true" onclick="selectRagOption('true')">
+                                <i class="fa-solid fa-circle-check"></i>
+                                <span data-t="rag_enabled">Activado</span>
+                            </div>
+                            <div class="rag-option" data-value="false" onclick="selectRagOption('false')">
+                                <i class="fa-solid fa-circle-xmark"></i>
+                                <span data-t="rag_disabled">Desactivado</span>
+                            </div>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -872,8 +1077,11 @@ function fill() {{
             // Trigger input event to update range display indicators
             field.dispatchEvent(new Event('input'));
             if (key === 'language') setLanguage(value || 'es');
+            if (key === 'chart_type') selectChartType(value || 'candles');
+            if (key === 'enable_rag') selectRagOption(value);
         }}
     }}
+    updateSymbolsByMarketType();
     updateAssetPreview(initial.symbol);
     toggleTradingMode();
     loadMT5Symbols();
@@ -936,6 +1144,26 @@ function renderAssetHTML(symbol, timeframe = "", compact = false) {{
     `;
 }}
 
+function selectChartType(value) {{
+    const input = document.getElementById('chart-type-input');
+    if (input) input.value = value;
+    
+    document.querySelectorAll('.chart-option').forEach(opt => {{
+        opt.classList.toggle('active', opt.dataset.value === value || opt.getAttribute('data-value') === value);
+    }});
+}}
+
+function selectRagOption(value) {{
+    const valStr = String(value).toLowerCase();
+    const input = document.getElementById('enable-rag-input');
+    if (input) input.value = valStr;
+    
+    document.querySelectorAll('.rag-option').forEach(opt => {{
+        const optVal = String(opt.dataset.value || opt.getAttribute('data-value')).toLowerCase();
+        opt.classList.toggle('active', optVal === valStr);
+    }});
+}}
+
 function goToStep(next) {{
     if (next < 1 || next > 5) return;
     
@@ -975,6 +1203,76 @@ function values() {{
     data.enable_rag = data.enable_rag === 'true';
     data.is_configured = true;
     return data;
+}}
+
+const DEFAULT_SYMBOLS_BY_MARKET = {{
+    "Forex": [
+        {{ name: "EURUSD", desc: "Euro / US Dollar" }},
+        {{ name: "GBPUSD", desc: "Great Britain Pound / US Dollar" }},
+        {{ name: "USDJPY", desc: "US Dollar / Japanese Yen" }},
+        {{ name: "AUDUSD", desc: "Australian Dollar / US Dollar" }},
+        {{ name: "USDCAD", desc: "US Dollar / Canadian Dollar" }},
+        {{ name: "USDCHF", desc: "US Dollar / Swiss Franc" }},
+        {{ name: "NZDUSD", desc: "New Zealand Dollar / US Dollar" }},
+        {{ name: "EURGBP", desc: "Euro / Great Britain Pound" }},
+        {{ name: "EURJPY", desc: "Euro / Japanese Yen" }},
+        {{ name: "GBPJPY", desc: "Great Britain Pound / Japanese Yen" }},
+        {{ name: "EURCHF", desc: "Euro / Swiss Franc" }},
+        {{ name: "CHFJPY", desc: "Swiss Franc / Japanese Yen" }},
+        {{ name: "AUDJPY", desc: "Australian Dollar / Japanese Yen" }},
+        {{ name: "GBPCAD", desc: "Great Britain Pound / Canadian Dollar" }}
+    ],
+    "Indices": [
+        {{ name: "US30", desc: "Dow Jones Industrial Average" }},
+        {{ name: "NAS100", desc: "Nasdaq 100" }},
+        {{ name: "SPX500", desc: "S&P 500 Index" }},
+        {{ name: "GER40", desc: "DAX 40 Index" }},
+        {{ name: "UK100", desc: "FTSE 100 Index" }},
+        {{ name: "JPN225", desc: "Nikkei 225" }}
+    ],
+    "Commodities": [
+        {{ name: "XAUUSD", desc: "Gold / US Dollar" }},
+        {{ name: "XAGUSD", desc: "Silver / US Dollar" }},
+        {{ name: "USOUSD", desc: "WTI Crude Oil / US Dollar" }},
+        {{ name: "UKOUSD", desc: "Brent Crude Oil / US Dollar" }}
+    ],
+    "Crypto": [
+        {{ name: "BTCUSD", desc: "Bitcoin / US Dollar" }},
+        {{ name: "ETHUSD", desc: "Ethereum / US Dollar" }},
+        {{ name: "SOLUSD", desc: "Solana / US Dollar" }},
+        {{ name: "XRPUSD", desc: "Ripple / US Dollar" }},
+        {{ name: "ADAUSD", desc: "Cardano / US Dollar" }}
+    ],
+    "Acciones": [
+        {{ name: "AAPL", desc: "Apple Inc." }},
+        {{ name: "MSFT", desc: "Microsoft Corp." }},
+        {{ name: "GOOGL", desc: "Alphabet Inc." }},
+        {{ name: "AMZN", desc: "Amazon.com Inc." }},
+        {{ name: "TSLA", desc: "Tesla Inc." }},
+        {{ name: "NVDA", desc: "NVIDIA Corp." }}
+    ]
+}};
+
+function updateSymbolsByMarketType() {{
+    const marketSelect = document.querySelector('[name="market_type"]');
+    const symbolSelect = document.querySelector('[name="symbol"]');
+    if (!marketSelect || !symbolSelect) return;
+    
+    const market = marketSelect.value || "Forex";
+    const symbols = DEFAULT_SYMBOLS_BY_MARKET[market] || DEFAULT_SYMBOLS_BY_MARKET["Forex"];
+    
+    const currentVal = symbolSelect.value || initial.symbol || "";
+    
+    symbolSelect.innerHTML = "";
+    symbols.forEach(s => {{
+        const opt = document.createElement("option");
+        opt.value = s.name;
+        opt.textContent = `${{s.name}} — ${{s.desc}}`;
+        opt.selected = s.name === currentVal;
+        symbolSelect.appendChild(opt);
+    }});
+    
+    updateAssetPreview(symbolSelect.value);
 }}
 
 function toggleTradingMode() {{
@@ -1046,12 +1344,12 @@ async function saveConfig() {{
 // ---- AI Provider Logic ----
 const AI_PROVIDERS = {providers_json};
 const PROVIDER_BRAND = {{
-    openai:   {{ color: '#10A37F', icon: 'fa-bolt',         label: 'OpenAI' }},
-    azure:    {{ color: '#0078D4', icon: 'fa-cloud',         label: 'Azure OpenAI' }},
-    deepseek: {{ color: '#4D6BFE', icon: 'fa-water',         label: 'DeepSeek' }},
-    claude:   {{ color: '#D97706', icon: 'fa-comment-dots',  label: 'Claude' }},
-    gemini:   {{ color: '#4285F4', icon: 'fa-star',          label: 'Gemini' }},
-    grok:     {{ color: '#E5E7EB', icon: 'fa-robot',         label: 'Grok' }},
+    openai:   {{ color: '#10A37F', logo: '{openai_base64}',   label: 'OpenAI',   lightBg: true }},
+    azure:    {{ color: '#0078D4', logo: '{azure_base64}',   label: 'Azure OpenAI' }},
+    deepseek: {{ color: '#4D6BFE', logo: '{deepseek_base64}', label: 'DeepSeek' }},
+    claude:   {{ color: '#D97706', logo: '{claude_base64}',   label: 'Claude',   lightBg: true }},
+    gemini:   {{ color: '#4285F4', logo: '{gemini_base64}',   label: 'Gemini' }},
+    grok:     {{ color: '#E5E7EB', logo: '{grok_base64}',     label: 'Grok',     lightBg: true }},
 }};
 
 function renderProviderCards() {{
@@ -1064,9 +1362,24 @@ function renderProviderCards() {{
         card.className = 'provider-card';
         card.dataset.provider = key;
         card.onclick = () => selectProvider(key);
+        
+        let iconContent = '';
+        let iconBg = '';
+        if (brand.logo) {{
+            iconContent = `<img src="${{brand.logo}}" style="width: 24px; height: 24px; object-fit: contain;">`;
+            if (brand.lightBg) {{
+                iconBg = 'background: #f8fafc; border: 1px solid var(--border);';
+            }} else {{
+                iconBg = `background: ${{brand.color}}15;`;
+            }}
+        }} else {{
+            iconContent = `<i class="fa-solid ${{brand.icon}}"></i>`;
+            iconBg = `background: ${{brand.color}}20; color: ${{brand.color}};`;
+        }}
+
         card.innerHTML = `
-            <div class="provider-icon" style="background: ${{brand.color}}20; color: ${{brand.color}};">
-                <i class="fa-solid ${{brand.icon}}"></i>
+            <div class="provider-icon" style="${{iconBg}}">
+                ${{iconContent}}
             </div>
             <div class="provider-name">${{info.name}}</div>
             <div class="provider-check"><i class="fa-solid fa-circle-check"></i></div>
