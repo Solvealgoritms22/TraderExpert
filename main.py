@@ -132,6 +132,8 @@ class TraderExpertApp:
         self._lock = threading.Lock()
         self._last_signal = None
         self._shutting_down = False
+        self._next_analysis_timestamp = None
+        self._last_reconnect_time = 0
 
     def _build_ai_client(self) -> AIClient:
         return AIClient(
@@ -166,9 +168,32 @@ class TraderExpertApp:
                         last_status = current_status
                         if self.window and self.window.window:
                             self.window.push_state(self.state_payload())
+                    
+                    # Automatic reconnection if connection is down and is_configured is True
+                    if not current_status:
+                        now = time.time()
+                        if now - getattr(self, "_last_reconnect_time", 0) > 15:
+                            self._last_reconnect_time = now
+                            logger.info("Conexión a MetaTrader 5 caída. Intentando reconexión automática en segundo plano...")
+                            threading.Thread(target=self._auto_reconnect_mt5, daemon=True).start()
                 except Exception:
                     pass
             time.sleep(5)
+
+    def _auto_reconnect_mt5(self):
+        try:
+            self.mt5.ensure_connected(
+                path=self.settings.get("mt5_path", ""),
+                account=self.settings.get("mt5_account", ""),
+                password=self.settings.get_mt5_password(),
+                server=self.settings.get("mt5_server", ""),
+            )
+            if self.mt5.check_connection():
+                logger.info("Reconexión automática a MetaTrader 5 exitosa.")
+                if self.window and self.window.window:
+                    self.window.push_state(self.state_payload())
+        except Exception as exc:
+            logger.warning("Reconexión automática a MetaTrader 5 falló: %s", exc)
 
     def _on_webview_ready(self):
         self.tray.start()
@@ -254,17 +279,22 @@ class TraderExpertApp:
             # Rebuild AI client with new provider settings
             self.rebuild_ai_client()
             self.window.push_state(self.state_payload())
-            # Try to initialize MT5 and login using the provided settings (non-blocking)
-            try:
-                self.mt5.ensure_connected(
-                    path=clean.get("mt5_path", ""),
-                    account=clean.get("mt5_account", ""),
-                    password=self.settings.get_mt5_password(),
-                    server=clean.get("mt5_server", ""),
-                )
-                logger.info("MT5 initialized/login attempt after saving settings.")
-            except Exception as exc:
-                logger.warning("MT5 login attempt failed after saving settings: %s", exc)
+            # Try to initialize MT5 and login using the provided settings in a background thread (non-blocking)
+            def bg_connect():
+                try:
+                    self.mt5.ensure_connected(
+                        path=clean.get("mt5_path", ""),
+                        account=clean.get("mt5_account", ""),
+                        password=self.settings.get_mt5_password(),
+                        server=clean.get("mt5_server", ""),
+                    )
+                    logger.info("MT5 initialized/login attempt after saving settings completed.")
+                    if self.window and self.window.window:
+                        self.window.push_state(self.state_payload())
+                except Exception as exc:
+                    logger.warning("MT5 login attempt failed after saving settings: %s", exc)
+
+            threading.Thread(target=bg_connect, daemon=True).start()
             return {"success": True}
         except Exception as exc:
             return {"success": False, "message": str(exc)}
@@ -283,6 +313,7 @@ class TraderExpertApp:
                 return {"success": False, "message": trade_check.get("reason", "No se puede operar")}
         if self.engine_running:
             return {"success": True}
+        self._next_analysis_timestamp = None
         self.engine_running = True
         self._loop_thread = threading.Thread(target=self._engine_loop, daemon=True)
         self._loop_thread.start()
@@ -291,6 +322,7 @@ class TraderExpertApp:
 
     def stop_engine(self):
         self.engine_running = False
+        self._next_analysis_timestamp = None
         self.window.push_state(self.state_payload())
         return {"success": True}
 
@@ -300,7 +332,14 @@ class TraderExpertApp:
                 self.run_analysis_now()
             except Exception as exc:
                 logger.warning("Analisis automatico fallo: %s", exc)
+            
+            if not self.engine_running or self._shutting_down:
+                break
+                
             wait_seconds = max(30, int(self.settings.get("analysis_interval_minutes", 5)) * 60)
+            self._next_analysis_timestamp = time.time() + wait_seconds
+            self.window.push_state(self.state_payload())
+            
             for _ in range(wait_seconds):
                 if not self.engine_running or self._shutting_down:
                     break
@@ -407,6 +446,7 @@ class TraderExpertApp:
             "engine_running": self.engine_running,
             "mt5_connected": mt5_connected,
             "market_open": self.mt5.is_market_open(symbol) if mt5_connected and symbol else False,
+            "next_analysis_timestamp": getattr(self, "_next_analysis_timestamp", None),
         }
         # Real mode: include account info and open positions
         if self.settings.get("trading_mode") == "real" and mt5_connected:

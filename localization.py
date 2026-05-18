@@ -89,7 +89,7 @@ LOCALIZATION_DICT = {
         "field_enable_sounds": "Sonidos de Alerta",
         "field_strategy_prompt": "Instrucciones de Estrategia (Prompt)",
         "field_rag_directory": "Carpeta de Conocimiento (RAG)",
-        "field_lang_response": "Idioma de Respuesta (IA)",
+        "field_lang_response": "Idioma de la App",
         "field_enable_rag": "Uso de RAG / Entrenamiento",
         "sounds_enabled": "🔊 Activado",
         "sounds_disabled": "🔇 Desactivado",
@@ -136,6 +136,9 @@ LOCALIZATION_DICT = {
         "real_balance": "Saldo Real",
         "market_open": "Mercado Abierto",
         "market_closed": "Mercado Cerrado",
+        "next_analysis_in": "Siguiente análisis en",
+        "next_analysis": "Próximo análisis",
+        "analyzing": "Analizando...",
     },
     "en": {
         "app_title": "TraderExpert",
@@ -272,6 +275,9 @@ LOCALIZATION_DICT = {
         "real_balance": "Real Balance",
         "market_open": "Market Open",
         "market_closed": "Market Closed",
+        "next_analysis_in": "Next analysis in",
+        "next_analysis": "Next analysis",
+        "analyzing": "Analyzing...",
     },
     "pt": {
         "app_title": "TraderExpert",
@@ -361,7 +367,7 @@ LOCALIZATION_DICT = {
         "field_enable_sounds": "Sons de Alerta",
         "field_strategy_prompt": "Instruções de Estratégia (Prompt)",
         "field_rag_directory": "Pasta de Conhecimento (RAG)",
-        "field_lang_response": "Idioma de Resposta (IA)",
+        "field_lang_response": "Idioma de la App",
         "field_enable_rag": "Uso de RAG / Treinamento",
         "sounds_enabled": "🔊 Ativado",
         "sounds_disabled": "🔇 Desactivado",
@@ -408,6 +414,9 @@ LOCALIZATION_DICT = {
         "real_balance": "Saldo Real",
         "market_open": "Mercado Aberto",
         "market_closed": "Mercado Fechado",
+        "next_analysis_in": "Próxima análise em",
+        "next_analysis": "Próxima análise",
+        "analyzing": "Analisando...",
     },
     "fr": {
         "app_title": "TraderExpert",
@@ -544,6 +553,9 @@ LOCALIZATION_DICT = {
         "real_balance": "Solde Réel",
         "market_open": "Marché Ouvert",
         "market_closed": "Marché Fermé",
+        "next_analysis_in": "Prochaine analyse dans",
+        "next_analysis": "Prochaine analyse",
+        "analyzing": "Analyse en cours...",
     },
     "de": {
         "app_title": "TraderExpert",
@@ -680,5 +692,8 @@ LOCALIZATION_DICT = {
         "real_balance": "Realer Kontostand",
         "market_open": "Markt Geöffnet",
         "market_closed": "Markt Geschlossen",
+        "next_analysis_in": "Nächste Analyse in",
+        "next_analysis": "Nächste Analyse",
+        "analyzing": "Analysieren...",
     }
 }

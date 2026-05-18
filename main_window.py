@@ -693,8 +693,20 @@ setTimeout(() => pywebview.api.route_after_splash().catch(() => {{}}), 2000);
                         <div class="field"><label data-t="field_stake_amount">Monto por Señal</label><input type="number" name="stake_amount" step="0.01"></div>
                     </div>
                     <div class="grid" style="grid-template-columns: 1fr 1fr;">
-                        <div class="field"><label data-t="field_payout_percent">Payout %</label><input type="number" name="payout_percent" step="0.01"></div>
-                        <div class="field"><label data-t="field_confidence_threshold">Confianza Mínima</label><input type="number" name="confidence_threshold" step="0.01" min="0.5" max="0.99"></div>
+                        <div class="field">
+                            <label data-t="field_payout_percent">Payout %</label>
+                            <div style="display:flex; align-items:center; gap:12px; margin-top:8px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:4px 12px; height:44px;">
+                                <input type="range" name="payout_percent" min="10" max="100" step="1" style="flex:1; accent-color:var(--accent); cursor:pointer; background:transparent; height:6px;" oninput="document.getElementById('payout-val').textContent = this.value + '%'">
+                                <span id="payout-val" style="font-size:13px; font-weight:800; color:var(--strong); min-width:45px; text-align:right;">80%</span>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label data-t="field_confidence_threshold">Confianza Mínima</label>
+                            <div style="display:flex; align-items:center; gap:12px; margin-top:8px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:4px 12px; height:44px;">
+                                <input type="range" name="confidence_threshold" min="0.50" max="0.95" step="0.01" style="flex:1; accent-color:var(--accent); cursor:pointer; background:transparent; height:6px;" oninput="document.getElementById('confidence-val').textContent = Math.round(this.value * 100) + '%'">
+                                <span id="confidence-val" style="font-size:13px; font-weight:800; color:var(--strong); min-width:45px; text-align:right;">65%</span>
+                            </div>
+                        </div>
                     </div>
                     <div class="grid" style="grid-template-columns: 1fr 1fr;">
                         <div class="field"><label data-t="field_prediction_horizon">Horizonte Predicción (min)</label><input type="number" name="prediction_horizon_minutes" min="1"></div>
@@ -744,7 +756,7 @@ setTimeout(() => pywebview.api.route_after_splash().catch(() => {{}}), 2000);
                         <input name="rag_directory" placeholder="Ej: rag_knowledge">
                     </div>
                     <div class="field">
-                        <label data-t="field_lang_response">Idioma de Respuesta (IA)</label>
+                        <label data-t="field_lang_response">Idioma de la App</label>
                         <input type="hidden" name="language" id="lang-input">
                         <div class="language-selector">
                             <div class="lang-option" data-lang="es" onclick="setLanguage('es')">
@@ -855,6 +867,8 @@ function fill() {{
         if (field) {{
             if (typeof value === 'boolean') field.value = String(value);
             else field.value = value ?? '';
+            // Trigger input event to update range display indicators
+            field.dispatchEvent(new Event('input'));
             if (key === 'language') setLanguage(value || 'es');
         }}
     }}
@@ -1288,15 +1302,10 @@ fill();
                 </div>
             </div>
             <div class="toolbar-right">
-                <!-- MT5 Connection State Badge -->
-                <div id="mt5-badge" style="display:inline-flex; align-items:center; gap:8px; background:rgba(0,0,0,0.15); padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border); font-size:11px; font-weight:700; transition: all 0.3s ease; height: 36px;">
-                    <i class="fa-solid fa-circle" id="mt5-indicator-dot" style="font-size:8px; color:var(--muted); transition: color 0.3s ease;"></i>
-                    <span id="mt5-indicator-text" style="text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);">MT5</span>
-                </div>
-                <!-- Market Status Badge -->
-                <div id="market-badge" style="display:inline-flex; align-items:center; gap:8px; background:rgba(0,0,0,0.15); padding:6px 12px; border-radius:var(--radius); border:1px solid var(--border); font-size:11px; font-weight:700; transition: all 0.3s ease; height: 36px;">
-                    <i class="fa-solid fa-circle" id="market-indicator-dot" style="font-size:8px; color:#EF4444; transition: color 0.3s ease;"></i>
-                    <span id="market-indicator-text" style="text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);">Mercado</span>
+                <!-- Next Analysis Timer Badge -->
+                <div id="timer-badge" style="display:none; align-items:center; gap:8px; background:rgba(74, 110, 130, 0.08); padding:6px 12px; border-radius:var(--radius); border:1px solid rgba(74, 110, 130, 0.3); font-size:11px; font-weight:700; transition: all 0.3s ease; height: 36px;" data-tip-key="next_analysis" data-tip="Siguiente análisis" onmouseover="showTip(this, event)" onmouseout="hideTip()">
+                    <i class="fa-solid fa-clock" id="timer-badge-icon" style="font-size:12px; color:var(--accent);"></i>
+                    <span id="timer-badge-text" style="color:var(--text); font-family: monospace; font-size: 12px; font-weight:700; letter-spacing:0.05em;">--:--</span>
                 </div>
                 <!-- Sleek Compact Date Filter -->
                 <div style="display:flex; align-items:center; gap:8px; background:var(--panel); padding:0 12px; border-radius:var(--radius); border:1px solid var(--border); height: 36px;">
@@ -1532,24 +1541,10 @@ function renderState(next) {{
         }}
     }}
 
-    // Update Market Status Badge
-    const marketBadge = document.getElementById('market-badge');
-    const marketDot = document.getElementById('market-indicator-dot');
-    const marketText = document.getElementById('market-indicator-text');
-    if (marketBadge && marketDot && marketText) {{
-        if (state.market_open) {{
-            marketDot.style.color = '#10B981';
-            marketText.textContent = (dict['market_open'] || 'Mercado Abierto');
-            marketText.style.color = 'var(--text)';
-            marketBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-            marketBadge.style.background = 'rgba(16, 185, 129, 0.08)';
-        }} else {{
-            marketDot.style.color = '#EF4444';
-            marketText.textContent = (dict['market_closed'] || 'Mercado Cerrado');
-            marketText.style.color = 'var(--muted)';
-            marketBadge.style.borderColor = 'rgba(239, 68, 68, 0.2)';
-            marketBadge.style.background = 'rgba(239, 68, 68, 0.05)';
-        }}
+    // Hide timers immediately if the engine is stopped
+    if (!state.engine_running) {{
+        const tb = document.getElementById('timer-badge');
+        if (tb) tb.style.display = 'none';
     }}
 
     // Filtering
@@ -2062,25 +2057,6 @@ setInterval(async () => {{
             }}
         }}
 
-        const marketBadge = document.getElementById('market-badge');
-        const marketDot = document.getElementById('market-indicator-dot');
-        const marketText = document.getElementById('market-indicator-text');
-        if (marketBadge && marketDot && marketText) {{
-            if (res.market_open) {{
-                marketDot.style.color = '#10B981';
-                marketText.textContent = (dict['market_open'] || 'Mercado Abierto');
-                marketText.style.color = 'var(--text)';
-                marketBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-                marketBadge.style.background = 'rgba(16, 185, 129, 0.08)';
-            }} else {{
-                marketDot.style.color = '#EF4444';
-                marketText.textContent = (dict['market_closed'] || 'Mercado Cerrado');
-                marketText.style.color = 'var(--muted)';
-                marketBadge.style.borderColor = 'rgba(239, 68, 68, 0.2)';
-                marketBadge.style.background = 'rgba(239, 68, 68, 0.05)';
-            }}
-        }}
-
         // Real-time balance and equity if real trading mode is active
         if (state.settings?.trading_mode === 'real' && res.mt5_connected && res.account_info) {{
             document.getElementById('balance').textContent = '$' + (res.account_info.balance || 0).toFixed(2);
@@ -2088,6 +2064,57 @@ setInterval(async () => {{
         }}
     }} catch(e) {{}}
 }}, 10000);
+
+// Dynamic 1-second countdown timer for next analysis
+setInterval(() => {{
+    if (!state.engine_running || !state.next_analysis_timestamp) {{
+        const tb = document.getElementById('timer-badge');
+        if (tb) tb.style.display = 'none';
+        return;
+    }}
+    
+    const now = Date.now() / 1000;
+    const diff = state.next_analysis_timestamp - now;
+    
+    const timerBadge = document.getElementById('timer-badge');
+    const timerText = document.getElementById('timer-badge-text');
+    
+    if (diff <= 0) {{
+        const lang = state.settings?.language || 'es';
+        const dict = LOCALIZATION[lang] || LOCALIZATION['es'];
+        const textStr = dict['analyzing'] || 'Analizando...';
+        if (timerBadge && timerText) {{
+            timerBadge.style.display = 'inline-flex';
+            timerText.textContent = textStr;
+        }}
+        return;
+    }}
+    
+    // Format minutes:seconds
+    const minutes = Math.floor(diff / 60);
+    const seconds = Math.floor(diff % 60);
+    const pad = (num) => String(num).padStart(2, '0');
+    const timerStr = pad(minutes) + ':' + pad(seconds);
+    
+    // Update toolbar badge
+    if (timerBadge && timerText) {{
+        timerBadge.style.display = 'inline-flex';
+        timerText.textContent = timerStr;
+        
+        // Premium dynamic alerts: if less than 30 seconds, pulse/alert border
+        if (diff < 30) {{
+            timerBadge.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+            timerBadge.style.background = 'rgba(239, 68, 68, 0.08)';
+            const icon = document.getElementById('timer-badge-icon');
+            if (icon) icon.style.color = '#EF4444';
+        }} else {{
+            timerBadge.style.borderColor = 'rgba(74, 110, 130, 0.3)';
+            timerBadge.style.background = 'rgba(74, 110, 130, 0.08)';
+            const icon = document.getElementById('timer-badge-icon');
+            if (icon) icon.style.color = 'var(--accent)';
+        }}
+    }}
+}}, 1000);
 
 renderState(state);
 </script>
